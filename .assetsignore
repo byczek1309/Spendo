@@ -1,0 +1,11 @@
+.git
+.git/**
+.wrangler
+.wrangler/**
+wrangler.jsonc
+.assetsignore
+.gitignore
+.env*
+.dev.vars*
+.DS_Store
+*.log
