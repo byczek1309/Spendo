@@ -1,23 +1,329 @@
-(()=>{'use strict';
-const KEY='dzienny.v1', categories=[['food','🍔','Jedzenie'],['fuel','⛽','Paliwo'],['home','🏠','Dom'],['fun','🎮','Rozrywka'],['shopping','🛍️','Zakupy'],['transport','🚗','Transport'],['other','📦','Inne']];
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)], pad=n=>String(n).padStart(2,'0'), dateKey=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, parseDate=s=>new Date(`${s}T12:00:00`), monthKey=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}`, money=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n), whole=n=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:0}).format(n), esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const today=new Date();let selectedMonth=monthKey(today), selectedDay='', state=load(), toastTimer;
-function blank(){return{budgets:{},expenses:[],theme:'system'}}function load(){try{return{...blank(),...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{return blank()}}function save(){localStorage.setItem(KEY,JSON.stringify(state))}function keyForMonth(m){return state.budgets[m]||{income:6000,bills:1500,fuel:500,savings:1000}}function expForMonth(m){return state.expenses.filter(x=>x.date.startsWith(m))}function icon(name){return (categories.find(c=>c[2]===name)||categories.at(-1))[1]}function daysInMonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0).getDate()}function monthName(m,cap=true){let d=parseDate(m+'-01');let t=new Intl.DateTimeFormat('pl-PL',{month:'long',year:'numeric'}).format(d);return cap?t.charAt(0).toLocaleUpperCase('pl-PL')+t.slice(1):t}
-function update(){const data=keyForMonth(selectedMonth), expenses=expForMonth(selectedMonth), available=Math.max(0,data.income-data.bills-data.fuel-data.savings), spent=expenses.reduce((a,x)=>a+x.amount,0), rem=Math.max(0,available-spent), monthDate=parseDate(selectedMonth+'-01'), isCurrent=selectedMonth===monthKey(today), monthDays=daysInMonth(monthDate), daysLeft=isCurrent?Math.max(1,monthDays-today.getDate()+1):monthDays, dayStart=isCurrent?expenses.filter(x=>x.date<dateKey(today)).reduce((a,x)=>a+x.amount,0):0, safe=Math.max(0,(available-dayStart)/daysLeft), todays=expenses.filter(x=>isCurrent&&x.date===dateKey(today)), todaySpent=todays.reduce((a,x)=>a+x.amount,0), nextDays=isCurrent?Math.max(1,monthDays-today.getDate()):monthDays, actualSafe=Math.max(0,rem/nextDays);
-$('#month-label').textContent=monthName(selectedMonth).split(' ')[0];$('#month-input').value=selectedMonth;$('#today-label').textContent=new Intl.DateTimeFormat('pl-PL',{weekday:'long',day:'numeric',month:'long'}).format(today).replace(/^./,s=>s.toLocaleUpperCase('pl-PL'));$('#safe-today').textContent=money(Math.max(0,safe-todaySpent));$('#spent-total').textContent=`${whole(spent)} zł wydane`;$('#monthly-total').textContent=`${whole(available)} zł budżetu`;$('#remaining-total').textContent=`${money(rem)} zł`;
-const liveToday=selectedMonth===monthKey(today);$('#spent-today').textContent=`${money(liveToday?todaySpent:0)} zł`;$('#month-progress').style.width=`${available?Math.min(100,spent/available*100):0}%`;let diff=safe-todaySpent,status=$('#status-message');status.classList.toggle('over',diff<0);status.textContent=diff>=0?`✓ Jesteś ${money(diff)} zł poniżej dzisiejszego limitu`:`↗ Limit przekroczony o ${money(-diff)} zł. Nowy plan to ${money(actualSafe)} zł dziennie.`;
-const list=$('#today-expenses');list.innerHTML=todays.sort((a,b)=>b.created.localeCompare(a.created)).map(expenseRow).join('');$('#empty-today').classList.toggle('hidden',todays.length>0);list.classList.toggle('hidden',todays.length===0);renderCalendar();renderHistory();renderBudget(data,available);}
-function expenseRow(x){let d=parseDate(x.date),when=x.date===dateKey(today)?new Intl.DateTimeFormat('pl-PL',{hour:'2-digit',minute:'2-digit'}).format(new Date(x.created)):new Intl.DateTimeFormat('pl-PL',{day:'numeric',month:'short'}).format(d);return `<div class="expense-row"><span class="expense-icon">${icon(x.category)}</span><div class="expense-info"><strong>${esc(x.category)}</strong><small>${x.note?esc(x.note)+' · ':''}${when}</small></div><strong class="expense-price">−${money(x.amount)} zł</strong><button class="delete-button" data-delete="${esc(x.id)}" aria-label="Usuń wydatek">×</button></div>`}
-function renderCalendar(){const [y,m]=selectedMonth.split('-').map(Number),first=new Date(y,m-1,1),n=new Date(y,m,0).getDate(),offset=(first.getDay()+6)%7,monthExps=expForMonth(selectedMonth),available=keyForMonth(selectedMonth),dailyBase=Math.max(0,available.income-available.bills-available.fuel-available.savings)/n;$('#calendar-month').textContent=monthName(selectedMonth);let html=['Pn','Wt','Śr','Cz','Pt','So','Nd'].map(w=>`<div class="calendar-cell weekday">${w}</div>`).join('');for(let i=0;i<offset;i++)html+='<div class="calendar-cell"></div>';for(let day=1;day<=n;day++){let iso=`${selectedMonth}-${pad(day)}`,sum=monthExps.filter(x=>x.date===iso).reduce((a,x)=>a+x.amount,0),dot='';if(sum>0)dot=`<i class="dot ${sum>dailyBase*1.1?'red':sum>dailyBase*.85?'yellow':'green'}"></i>`;let label=new Intl.DateTimeFormat('pl-PL',{weekday:'long',day:'numeric',month:'long'}).format(parseDate(iso));html+=`<div class="calendar-cell day-cell ${iso===dateKey(today)?'today':''} ${iso===selectedDay?'selected':''}" role="button" tabindex="0" aria-label="${label}" aria-pressed="${iso===selectedDay}" data-day="${iso}">${day}${dot}</div>`}$('#calendar-grid').innerHTML=html}
-function renderHistory(){let all=expForMonth(selectedMonth),rows=all.filter(x=>!selectedDay||x.date===selectedDay).sort((a,b)=>b.date.localeCompare(a.date)||b.created.localeCompare(a.created));$('#history-heading').textContent=selectedDay?'Wydatki wybranego dnia':'Wydatki w tym miesiącu';$('#history-count').textContent=`${rows.length} ${rows.length===1?'wydatek':'wydatków'}`;let last='';$('#history-list').innerHTML=rows.length?rows.map(x=>{let head='';if(x.date!==last){last=x.date;head=`<div class="history-day">${new Intl.DateTimeFormat('pl-PL',{weekday:'long',day:'numeric',month:'long'}).format(parseDate(x.date))}</div>`}return head+expenseRow(x)}).join(''):`<div class="empty-state"><span>🌿</span><p>${selectedDay?'Brak wydatków tego dnia.':'Historia zaczyna się od małych kroków.'}</p></div>`}
-function renderBudget(data,available){$('#budget-available').textContent=`${money(available)} zł`;const f=$('#budget-form');for(const name of ['income','bills','fuel','savings'])f.elements[name].value=data[name]}
-function showScreen(name){$$('.screen').forEach(x=>x.classList.toggle('active',x.id===`screen-${name}`));$$('.tab').forEach(x=>x.classList.toggle('active',x.dataset.screen===name));window.scrollTo({top:0,behavior:'smooth'})}function showToast(t){let el=$('#toast');el.textContent=t;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),2200)}
-function openModal(){let f=$('#expense-form');f.reset();f.elements.date.value=dateKey(today);f.elements.category.value='Jedzenie';$('#expense-modal').classList.remove('hidden');setTimeout(()=>f.elements.amount.focus(),100)}function closeModal(){$('#expense-modal').classList.add('hidden')}
-$('#category-select').innerHTML=categories.map(c=>`<option value="${c[2]}">${c[1]} ${c[2]}</option>`).join('');
-$$('[data-screen]').forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));$$('[data-action=add]').forEach(b=>b.addEventListener('click',openModal));$$('[data-action=close]').forEach(b=>b.addEventListener('click',closeModal));$('#expense-modal').addEventListener('click',e=>{if(e.target.id==='expense-modal')closeModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
-$('#expense-form').addEventListener('submit',e=>{e.preventDefault();let f=e.currentTarget,amount=Number(f.elements.amount.value);if(!(amount>0))return;state.expenses.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),amount,category:f.elements.category.value,date:f.elements.date.value,note:f.elements.note.value.trim(),created:new Date().toISOString()});save();closeModal();update();showToast('Wydatek dodany')});document.addEventListener('click',e=>{let b=e.target.closest('[data-delete]');if(b){state.expenses=state.expenses.filter(x=>x.id!==b.dataset.delete);save();update();showToast('Wydatek usunięty')}});
-$('#budget-form').addEventListener('submit',e=>{e.preventDefault();let f=e.currentTarget;state.budgets[selectedMonth]=Object.fromEntries(['income','bills','fuel','savings'].map(n=>[n,Math.max(0,Number(f.elements[n].value)||0)]));save();update();showToast('Plan zapisany')});$('#month-input').addEventListener('change',e=>{if(e.target.value){selectedMonth=e.target.value;selectedDay='';update()}});$('#prev-month').addEventListener('click',()=>shiftMonth(-1));$('#next-month').addEventListener('click',()=>shiftMonth(1));function shiftMonth(i){let d=parseDate(selectedMonth+'-01');d.setMonth(d.getMonth()+i);selectedMonth=monthKey(d);selectedDay='';update()}
-$('#calendar-grid').addEventListener('click',e=>{let cell=e.target.closest('[data-day]');if(cell){selectedDay=cell.dataset.day;renderCalendar();renderHistory()}});$('#calendar-grid').addEventListener('keydown',e=>{let cell=e.target.closest('[data-day]');if(cell&&(e.key==='Enter'||e.key===' ')){e.preventDefault();selectedDay=cell.dataset.day;renderCalendar();renderHistory()}});
-function applyTheme(){let pref=state.theme||'system',dark=pref==='dark'||(pref==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.body.dataset.theme=dark?'dark':'light';$('#theme-select').value=pref;document.querySelector('meta[name=theme-color]').content=dark?'#161a17':'#f6f5f1'}$('#theme-select').addEventListener('change',e=>{state.theme=e.target.value;save();applyTheme()});matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',applyTheme);$('#export-data').addEventListener('click',()=>{let blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Spendo-kopia-${dateKey(today)}.json`;a.click();URL.revokeObjectURL(a.href);showToast('Kopia danych pobrana')});
-applyTheme();update();if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('/sw.js').catch(()=>{});
+(() => {
+  'use strict';
+
+  const KEY = 'dzienny.v1';
+  const Core = window.SpendoBudgetCore;
+  const $ = selector => document.querySelector(selector);
+  const $$ = selector => [...document.querySelectorAll(selector)];
+  const pad = value => String(value).padStart(2, '0');
+  const today = new Date();
+  const todayKey = Core.dateKey(today);
+  const money = value => new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+  const whole = value => new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 0 }).format(value);
+  const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const monthName = (month, cap = true) => {
+    const date = Core.parseDateKey(`${month}-01`);
+    const name = new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric' }).format(date);
+    return cap ? name.charAt(0).toLocaleUpperCase('pl-PL') + name.slice(1) : name;
+  };
+  const formatShortDate = (value, includeYear = false) => new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'short', ...(includeYear ? { year: 'numeric' } : {}) }).format(Core.parseDateKey(value)).replace('.', '');
+
+  let selectedPeriod = Core.periodForDate(todayKey, 1);
+  let selectedMonth = Core.monthKey(today);
+  let selectedDay = '';
+  let toastTimer;
+  let state;
+  try {
+    const normalized = Core.normalizeState(JSON.parse(localStorage.getItem(KEY) || '{}'));
+    state = normalized.state;
+    if (normalized.migrated) localStorage.setItem(KEY, JSON.stringify(state));
+  } catch {
+    state = Core.blankState();
+  }
+  selectedPeriod = Core.periodForDate(todayKey, state.payday);
+
+  function save() {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }
+
+  function getBudget(period = selectedPeriod) {
+    return Core.budgetForPeriod(state.budgets, period);
+  }
+
+  function hasBudget(period = selectedPeriod) {
+    const saved = state.budgets[period.planMonth];
+    return Object.prototype.hasOwnProperty.call(state.budgets, period.planMonth)
+      && ['income', 'bills', 'fuel', 'savings'].every(field => saved?.[field] !== undefined && Number.isFinite(Number(saved[field])));
+  }
+
+  function periodExpenses(period = selectedPeriod) {
+    return Core.expensesInPeriod(state.expenses, period);
+  }
+
+  function category(value) {
+    return Core.categoryFor(value);
+  }
+
+  function periodLabel(period) {
+    const crossesYear = period.start.slice(0, 4) !== period.end.slice(0, 4);
+    return `${formatShortDate(period.start, crossesYear)} → ${formatShortDate(period.end, crossesYear)}`;
+  }
+
+  function update() {
+    const budget = getBudget();
+    const amounts = Core.poolAmounts(budget);
+    const expenses = periodExpenses();
+    const spending = Core.poolSpending(expenses);
+    const plan = Core.dailyPlan(selectedPeriod, amounts.life, expenses, todayKey);
+    const todayExpenses = expenses.filter(expense => expense.date === todayKey).sort((a, b) => b.created.localeCompare(a.created));
+    const isCurrentPeriod = Core.dateIsInPeriod(todayKey, selectedPeriod);
+    const configured = hasBudget();
+    const spentLife = spending.life;
+    const percentage = amounts.life > 0 ? Math.min(100, Math.max(0, spentLife / amounts.life * 100)) : (spentLife > 0 ? 100 : 0);
+
+    $('#month-label').textContent = periodLabel(selectedPeriod);
+    $('#month-input').value = selectedPeriod.planMonth;
+    $('#today-label').textContent = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(today).replace(/^./, char => char.toLocaleUpperCase('pl-PL'));
+    $('#screen-today').classList.toggle('needs-budget', !configured);
+    $('#budget-setup-card').classList.toggle('hidden', configured);
+    $('#safe-today').textContent = configured ? money(isCurrentPeriod ? plan.safeToday : Math.max(0, amounts.life - spending.life) / selectedPeriod.days) : '—';
+    $('.hero-sub').textContent = `z puli Na życie · do ${formatShortDate(selectedPeriod.end)}`;
+    $('#spent-total').textContent = `${whole(spentLife)} zł wydane na życie`;
+    $('#monthly-total').textContent = `${whole(amounts.life)} zł na życie`;
+    $('#remaining-total').textContent = configured ? `${money(amounts.life - spending.life)} zł` : '—';
+    $('.summary-card .summary-note').textContent = 'do końca okresu';
+    $('#spent-today').textContent = configured ? `${money(isCurrentPeriod ? plan.todaySpent : 0)} zł` : '—';
+    $('#month-progress').style.width = `${percentage}%`;
+    $('#detail-life-remaining').textContent = `${money(plan.remainingLife)} zł`;
+    $('#detail-days-remaining').textContent = `${plan.remainingDays}`;
+    $('#detail-today-limit').textContent = `${money(plan.availableToday)} zł`;
+    $('#detail-today-spent').textContent = `${money(plan.todaySpent)} zł`;
+    $('.daily-explainer').classList.toggle('hidden', !configured || !isCurrentPeriod);
+    $('#fuel-pool-summary').classList.toggle('hidden', !configured || amounts.fuel <= 0);
+    $('#fuel-pool-summary-text').textContent = `${money(amounts.fuel - spending.fuel)} zł pozostało z ${money(amounts.fuel)} zł`;
+    const status = $('#status-message');
+    status.classList.toggle('over', isCurrentPeriod && plan.overspend > 0);
+    if (!isCurrentPeriod) status.textContent = `Okres budżetowy: ${periodLabel(selectedPeriod)}`;
+    else if (plan.overspend > 0) status.textContent = `↗ Limit przekroczony o ${money(plan.overspend)} zł. Spendo nie blokuje wydatków — pozostały budżet przeliczono na kolejne dni.${plan.daysAfterToday ? ` Od jutra: ${whole(plan.nextDailyLimit)} zł dziennie.` : ' To ostatni dzień tego okresu.'}`;
+    else status.textContent = `✓ Zostało ${money(plan.safeToday)} zł z dzisiejszego limitu`;
+
+    const list = $('#today-expenses');
+    list.innerHTML = todayExpenses.map(expenseRow).join('');
+    $('#empty-today').classList.toggle('hidden', todayExpenses.length > 0);
+    list.classList.toggle('hidden', todayExpenses.length === 0);
+    renderCalendar();
+    renderHistory();
+    renderBudget(budget, amounts, spending);
+  }
+
+  function expenseRow(expense) {
+    const itemCategory = category(expense.category);
+    const when = expense.date === todayKey && expense.created
+      ? new Intl.DateTimeFormat('pl-PL', { hour: '2-digit', minute: '2-digit' }).format(new Date(expense.created))
+      : new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'short' }).format(Core.parseDateKey(expense.date));
+    return `<div class="expense-row"><span class="expense-icon">${itemCategory.icon}</span><div class="expense-info"><strong>${esc(expense.category)}</strong><small>${expense.note ? `${esc(expense.note)} · ` : ''}${when}</small></div><strong class="expense-price">−${money(expense.amount)} zł</strong><button class="delete-button" data-delete="${esc(expense.id)}" aria-label="Usuń wydatek">×</button></div>`;
+  }
+
+  function renderCalendar() {
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const first = new Date(year, month - 1, 1, 12);
+    const days = new Date(year, month, 0).getDate();
+    const offset = (first.getDay() + 6) % 7;
+    const monthExpenses = state.expenses.filter(expense => expense.date.startsWith(selectedMonth));
+    $('#calendar-month').textContent = monthName(selectedMonth);
+    let html = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'].map(day => `<div class="calendar-cell weekday">${day}</div>`).join('');
+    for (let index = 0; index < offset; index += 1) html += '<div class="calendar-cell"></div>';
+    for (let day = 1; day <= days; day += 1) {
+      const iso = `${selectedMonth}-${pad(day)}`;
+      const dayPeriod = Core.periodForDate(iso, state.payday);
+      const dayBudget = getBudget(dayPeriod);
+      const dayLife = Core.poolAmounts(dayBudget).life;
+      const dayPlan = Core.dailyPlan(dayPeriod, dayLife, state.expenses, iso);
+      const sum = monthExpenses.filter(expense => expense.date === iso && expense.poolId === 'life').reduce((total, expense) => total + Number(expense.amount), 0);
+      const dotClass = !hasBudget(dayPeriod) || sum <= 0 ? '' : sum > dayPlan.availableToday ? 'red' : sum > dayPlan.availableToday * 0.85 ? 'yellow' : 'green';
+      const label = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(Core.parseDateKey(iso));
+      html += `<div class="calendar-cell day-cell ${iso === todayKey ? 'today' : ''} ${iso === selectedDay ? 'selected' : ''}" role="button" tabindex="0" aria-label="${label}" aria-pressed="${iso === selectedDay}" data-day="${iso}">${day}${dotClass ? `<i class="dot ${dotClass}"></i>` : ''}</div>`;
+    }
+    $('#calendar-grid').innerHTML = html;
+  }
+
+  function renderHistory() {
+    const all = state.expenses.filter(expense => expense.date.startsWith(selectedMonth));
+    const rows = all.filter(expense => !selectedDay || expense.date === selectedDay)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.created.localeCompare(a.created));
+    $('#history-heading').textContent = selectedDay ? 'Wydatki wybranego dnia' : 'Wydatki w tym miesiącu';
+    $('#history-count').textContent = `${rows.length} ${rows.length === 1 ? 'wydatek' : 'wydatków'}`;
+    let last = '';
+    $('#history-list').innerHTML = rows.length ? rows.map(expense => {
+      let heading = '';
+      if (expense.date !== last) {
+        last = expense.date;
+        heading = `<div class="history-day">${new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(Core.parseDateKey(expense.date))}</div>`;
+      }
+      return heading + expenseRow(expense);
+    }).join('') : `<div class="empty-state"><span>🌿</span><p>${selectedDay ? 'Brak wydatków tego dnia.' : 'Historia zaczyna się od małych kroków.'}</p></div>`;
+  }
+
+  function renderBudget(budget, amounts, spending) {
+    const configured = hasBudget();
+    $('#budget-setup-note').classList.toggle('hidden', configured);
+    $('.budget-total').classList.toggle('hidden', !configured);
+    $('.pool-list').classList.toggle('hidden', !configured);
+    $('#budget-available').textContent = `${money(amounts.life)} zł`;
+    $('#budget-period-label').textContent = periodLabel(selectedPeriod);
+    $('#budget-income-label').textContent = `${money(budget.income)} zł`;
+    $('#pool-bills').textContent = `${money(amounts.bills - spending.bills)} zł`;
+    $('#pool-bills-remaining').textContent = `z ${money(amounts.bills)} zł w planie`;
+    $('#pool-fuel').textContent = `${money(amounts.fuel - spending.fuel)} zł`;
+    $('#pool-fuel-remaining').textContent = `z ${money(amounts.fuel)} zł w planie`;
+    $('#pool-savings').textContent = `${money(amounts.savings)} zł`;
+    $('#pool-savings-remaining').textContent = 'Kwota zaplanowana do odłożenia';
+    $('#pool-life').textContent = `${money(amounts.life - spending.life)} zł`;
+    $('#pool-life-remaining').textContent = `z ${money(amounts.life)} zł w planie`;
+    $('#budget-form').elements.income.value = configured ? budget.income : '';
+    $('#budget-form').elements.bills.value = configured ? budget.bills : '';
+    $('#budget-form').elements.fuel.value = configured ? budget.fuel : '';
+    $('#budget-form').elements.savings.value = configured ? budget.savings : '';
+  }
+
+  function showScreen(name) {
+    $$('.screen').forEach(screen => screen.classList.toggle('active', screen.id === `screen-${name}`));
+    $$('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.screen === name));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function showToast(message) {
+    const element = $('#toast');
+    element.textContent = message;
+    element.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => element.classList.remove('visible'), 2200);
+  }
+
+  function openModal() {
+    const form = $('#expense-form');
+    form.reset();
+    form.elements.date.value = todayKey;
+    form.elements.category.value = 'Jedzenie';
+    updateCategoryPoolHint();
+    $('#expense-modal').classList.remove('hidden');
+    setTimeout(() => form.elements.amount.focus(), 100);
+  }
+
+  function closeModal() {
+    $('#expense-modal').classList.add('hidden');
+  }
+
+  function updateCategoryPoolHint() {
+    const selected = Core.categoryFor($('#category-select').value);
+    const pool = Core.pools.find(item => item.id === selected.poolId);
+    $('#category-pool-hint').textContent = `Z puli ${pool.name}`;
+  }
+
+  $('#category-select').innerHTML = Core.categories.map(item => `<option value="${item.name}">${item.icon} ${item.name}</option>`).join('');
+  $('#payday-select').innerHTML = Array.from({ length: 31 }, (_, index) => `<option value="${index + 1}">${index + 1}. dzień miesiąca</option>`).join('');
+  $('#category-select').addEventListener('change', updateCategoryPoolHint);
+  $$('[data-screen]').forEach(button => button.addEventListener('click', () => showScreen(button.dataset.screen)));
+  $$('[data-action=add]').forEach(button => button.addEventListener('click', openModal));
+  $$('[data-action=close]').forEach(button => button.addEventListener('click', closeModal));
+  $('#expense-modal').addEventListener('click', event => { if (event.target.id === 'expense-modal') closeModal(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
+
+  $('#expense-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const amount = Number(form.elements.amount.value);
+    if (!(amount > 0) || !form.elements.date.value) return;
+    const expenseDate = form.elements.date.value;
+    const categoryName = form.elements.category.value;
+    state.expenses.push({
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      amount,
+      category: categoryName,
+      poolId: Core.poolForCategory(categoryName),
+      date: expenseDate,
+      note: form.elements.note.value.trim(),
+      created: new Date().toISOString()
+    });
+    save();
+    closeModal();
+    update();
+    const dateLabel = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'long' }).format(Core.parseDateKey(expenseDate));
+    showToast(expenseDate === todayKey ? 'Wydatek dodany' : expenseDate < todayKey ? `Wydatek zapisany w historii — ${dateLabel}` : `Wydatek zapisany na ${dateLabel}`);
+  });
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-delete]');
+    if (!button) return;
+    state.expenses = state.expenses.filter(expense => expense.id !== button.dataset.delete);
+    save();
+    update();
+    showToast('Wydatek usunięty');
+  });
+
+  $('#budget-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    state.budgets[selectedPeriod.planMonth] = Object.fromEntries(['income', 'bills', 'fuel', 'savings'].map(name => [name, Math.max(0, Number(form.elements[name].value) || 0)]));
+    save();
+    update();
+    showToast('Plan zapisany');
+  });
+
+  $('#month-input').addEventListener('change', event => {
+    if (!event.target.value) return;
+    selectedPeriod = Core.periodStartingInMonth(event.target.value, state.payday);
+    selectedMonth = event.target.value;
+    selectedDay = '';
+    update();
+  });
+  $('#prev-month').addEventListener('click', () => shiftMonth(-1));
+  $('#next-month').addEventListener('click', () => shiftMonth(1));
+  function shiftMonth(offset) {
+    const date = Core.parseDateKey(`${selectedMonth}-01`);
+    date.setMonth(date.getMonth() + offset);
+    selectedMonth = `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
+    selectedDay = '';
+    update();
+  }
+
+  $('#calendar-grid').addEventListener('click', event => {
+    const cell = event.target.closest('[data-day]');
+    if (!cell) return;
+    selectedDay = cell.dataset.day;
+    renderCalendar();
+    renderHistory();
+  });
+  $('#calendar-grid').addEventListener('keydown', event => {
+    const cell = event.target.closest('[data-day]');
+    if (!cell || !['Enter', ' '].includes(event.key)) return;
+    event.preventDefault();
+    selectedDay = cell.dataset.day;
+    renderCalendar();
+    renderHistory();
+  });
+
+  function applyTheme() {
+    const preference = state.theme || 'system';
+    const dark = preference === 'dark' || (preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.body.dataset.theme = dark ? 'dark' : 'light';
+    $('#theme-select').value = preference;
+    document.querySelector('meta[name=theme-color]').content = dark ? '#161a17' : '#f6f5f1';
+  }
+  $('#theme-select').addEventListener('change', event => { state.theme = event.target.value; save(); applyTheme(); });
+  $('#payday-select').addEventListener('change', event => {
+    state.payday = Core.normalizedPayday(event.target.value);
+    selectedPeriod = Core.periodForDate(todayKey, state.payday);
+    $('#payday-select').value = String(state.payday);
+    $('#payday-heading').textContent = `Wypłata: ${state.payday}. dzień miesiąca`;
+    save();
+    update();
+    showToast('Okres budżetowy zaktualizowany');
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+  $('#export-data').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const anchor = document.createElement('a');
+    anchor.href = URL.createObjectURL(blob);
+    anchor.download = `Spendo-kopia-${todayKey}.json`;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
+    showToast('Kopia danych pobrana');
+  });
+
+  $('#payday-select').value = String(state.payday);
+  $('#payday-heading').textContent = `Wypłata: ${state.payday}. dzień miesiąca`;
+  applyTheme();
+  update();
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('/sw.js').catch(() => {});
 })();
