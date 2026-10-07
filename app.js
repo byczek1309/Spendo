@@ -22,6 +22,7 @@
   let selectedMonth = Core.monthKey(today);
   let selectedDay = '';
   let toastTimer;
+  let goalToDelete = '';
   let state;
   try {
     const normalized = Core.normalizeState(JSON.parse(localStorage.getItem(KEY) || '{}'));
@@ -59,7 +60,103 @@
     return `${formatShortDate(period.start, crossesYear)} → ${formatShortDate(period.end, crossesYear)}`;
   }
 
+  function monthDistance(from, to) {
+    const [fromYear, fromMonth] = from.slice(0, 7).split('-').map(Number);
+    const [toYear, toMonth] = to.slice(0, 7).split('-').map(Number);
+    return Math.max(0, (toYear - fromYear) * 12 + toMonth - fromMonth);
+  }
+
+  function accrueSavingsGoals() {
+    let changed = false;
+    state.savingsGoals.forEach(goal => {
+      if (!goal.lastAccruedPeriod) {
+        goal.lastAccruedPeriod = selectedPeriod.start;
+        changed = true;
+        return;
+      }
+      const lastPeriod = Core.periodForDate(goal.lastAccruedPeriod, state.payday);
+      if (lastPeriod.start >= selectedPeriod.start) return;
+      const elapsedPeriods = monthDistance(lastPeriod.start, selectedPeriod.start);
+      if (goal.active && Core.goalRemaining(goal) > 0 && elapsedPeriods > 0) {
+        goal.savedAmount = Core.accrueGoal(goal, elapsedPeriods);
+      }
+      goal.lastAccruedPeriod = selectedPeriod.start;
+      changed = true;
+    });
+    if (changed) save();
+  }
+
+  function activeGoalAmount() {
+    return Core.activeGoalContributions(state.savingsGoals);
+  }
+
+  function periodCountToTarget(targetDate) {
+    if (!targetDate || targetDate < todayKey) return 0;
+    const targetPeriod = Core.periodForDate(targetDate, state.payday);
+    return monthDistance(selectedPeriod.start, targetPeriod.start) + 1;
+  }
+
+  function goalDateAssessment(goal) {
+    if (!goal.targetDate || Core.goalRemaining(goal) <= 0) return '';
+    const remaining = Core.goalRemaining(goal);
+    const periods = periodCountToTarget(goal.targetDate);
+    const required = Core.requiredGoalContribution(remaining, periods);
+    const onTime = goal.active && periods > 0 && goal.contributionPerPeriod * periods >= remaining;
+    const formatted = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }).format(Core.parseDateKey(goal.targetDate));
+    const result = onTime
+      ? '<span class="goal-on-time">✓ Przy obecnym planie osiągniesz cel przed terminem.</span>'
+      : '<span class="goal-late">⚠️ Przy obecnym odkładaniu nie osiągniesz celu na czas.</span>';
+    const suggested = required > 0 && !onTime ? `<span class="goal-required">Aby zdążyć, odkładaj około ${money(required)} zł / okres.</span>` : '';
+    return `<div class="goal-date-plan"><span>Termin: ${formatted}</span>${result}${suggested}</div>`;
+  }
+
+  function renderGoalCard(goal) {
+    const remaining = Core.goalRemaining(goal);
+    const progress = Core.goalProgress(goal);
+    const completed = remaining <= 0;
+    const status = !goal.active ? '<span class="goal-status paused">⏸ Wstrzymany</span>' : completed ? '<span class="goal-status complete">🎉 Cel osiągnięty</span>' : '';
+    const periods = Core.goalPeriodsRemaining(goal);
+    const lastTwo = periods % 100;
+    const lastOne = periods % 10;
+    const periodWord = periods === 1 ? 'okres' : lastOne >= 2 && lastOne <= 4 && (lastTwo < 12 || lastTwo > 14) ? 'okresy' : 'okresów';
+    const periodEstimate = !goal.active || completed || !periods ? '' : `<span class="goal-period-estimate">Do celu: ~${periods} ${periodWord}</span>`;
+    const contribution = !goal.active || completed ? '0,00' : money(goal.contributionPerPeriod);
+    return `<article class="panel goal-card ${!goal.active ? 'is-paused' : ''}"><div class="goal-card-head"><div class="goal-name-block"><span class="goal-mark">🎯</span><div><h3>${esc(goal.name || 'Cel oszczędnościowy')}</h3>${status}</div></div><div class="goal-actions"><button type="button" class="goal-icon-button" data-goal-action="edit" data-goal-id="${esc(goal.id)}" aria-label="Edytuj cel ${esc(goal.name)}">✎</button><button type="button" class="goal-icon-button" data-goal-action="pause" data-goal-id="${esc(goal.id)}" aria-label="${goal.active ? 'Wstrzymaj' : 'Wznów'} cel ${esc(goal.name)}">${goal.active ? 'Ⅱ' : '▶'}</button><button type="button" class="goal-icon-button danger-icon" data-goal-action="delete" data-goal-id="${esc(goal.id)}" aria-label="Usuń cel ${esc(goal.name)}">×</button></div></div><div class="goal-progress-line"><div class="goal-progress" role="progressbar" aria-label="Postęp celu ${esc(goal.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress)}"><span style="width:${progress}%"></span></div><strong>${new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 1 }).format(progress)}%</strong></div><div class="goal-amounts"><strong>${money(Math.min(Number(goal.savedAmount) || 0, Number(goal.targetAmount) || 0))} zł</strong><span>/ ${money(goal.targetAmount)} zł</span></div><p class="goal-remaining">${completed ? 'Cel osiągnięty' : `Brakuje ${money(remaining)} zł`}</p><div class="goal-card-foot"><span>Odkładasz ${contribution} zł / okres</span>${periodEstimate}</div>${goalDateAssessment(goal)}</article>`;
+  }
+
+  function renderGoals(amounts) {
+    accrueSavingsGoals();
+    const assigned = activeGoalAmount();
+    const configured = hasBudget();
+    $('#goals-pool-plan').textContent = configured ? `${money(amounts.savings)} zł / okres` : 'Ustaw budżet';
+    $('#goals-pool-assigned').textContent = `${money(assigned)} zł`;
+    const overage = configured && assigned > amounts.savings;
+    const warning = `⚠️ Cele wymagają ${money(assigned)} zł, ale na oszczędności planujesz ${money(amounts.savings)} zł / okres. Zwiększ pulę Oszczędności lub zmniejsz składki celów.`;
+    $('#goals-overage').textContent = warning;
+    $('#goals-overage').classList.toggle('hidden', !overage);
+    $('#goals-empty').classList.toggle('hidden', state.savingsGoals.length > 0);
+    $('#goals-list').innerHTML = state.savingsGoals.map(renderGoalCard).join('');
+    $('#budget-goals-summary').innerHTML = renderBudgetGoalsSummary(amounts, configured, assigned);
+  }
+
+  function renderBudgetGoalsSummary(amounts, configured, assigned) {
+    const goals = state.savingsGoals;
+    const warning = configured && assigned > amounts.savings
+      ? `<p class="goal-warning" role="alert">⚠️ Cele wymagają ${money(assigned)} zł, ale na oszczędności planujesz ${money(amounts.savings)} zł / okres.</p>`
+      : '';
+    const rows = goals.length
+      ? goals.map(goal => {
+        const amount = goal.active && Core.goalRemaining(goal) > 0 ? money(goal.contributionPerPeriod) : '0,00';
+        const note = !goal.active ? ' · Wstrzymany' : Core.goalRemaining(goal) <= 0 ? ' · Osiągnięty' : '';
+        return `<div class="budget-goal-row"><span>${esc(goal.name || 'Cel oszczędnościowy')}${note}</span><strong>${amount} zł</strong></div>`;
+      }).join('')
+      : '<p class="budget-goals-empty">Nie masz jeszcze przypisanych celów.</p>';
+    const label = configured ? `${money(assigned)} / ${money(amounts.savings)} zł przypisane` : 'Ustaw pulę Oszczędności, aby sprawdzić plan.';
+    return `<div class="budget-goals-heading"><strong>Cele</strong><button type="button" class="text-button" data-screen="goals">＋ Dodaj cel</button></div>${rows}<strong class="budget-goals-total">${label}</strong>${warning}`;
+  }
+
   function update() {
+    accrueSavingsGoals();
     const budget = getBudget();
     const amounts = Core.poolAmounts(budget);
     const expenses = periodExpenses();
@@ -103,6 +200,7 @@
     renderHistory();
     renderBudget(budget, amounts, spending);
     renderStats(expenses, amounts);
+    renderGoals(amounts);
   }
 
   function expenseRow(expense) {
@@ -277,6 +375,96 @@
     $('#expense-modal').classList.add('hidden');
   }
 
+  function closeGoalForm() {
+    $('#goal-modal').classList.add('hidden');
+    $('#goal-form-error').classList.add('hidden');
+  }
+
+  function openGoalForm(goalId = '') {
+    const form = $('#goal-form');
+    const goal = state.savingsGoals.find(item => item.id === goalId);
+    form.reset();
+    form.dataset.confirmOverage = '';
+    form.elements.id.value = goal?.id || '';
+    form.elements.name.value = goal?.name || '';
+    form.elements.targetAmount.value = goal?.targetAmount || '';
+    form.elements.savedAmount.value = goal ? goal.savedAmount : '0';
+    form.elements.contributionPerPeriod.value = goal?.contributionPerPeriod || '';
+    form.elements.targetDate.value = goal?.targetDate || '';
+    $('#goal-modal-title').textContent = goal ? 'Edytuj cel' : 'Dodaj cel';
+    form.querySelector('[type=submit]').textContent = goal ? 'Zapisz zmiany' : 'Dodaj cel';
+    $('#goal-form-error').classList.add('hidden');
+    $('#goal-modal').classList.remove('hidden');
+    setTimeout(() => form.elements.name.focus(), 100);
+  }
+
+  function closeGoalDelete() {
+    goalToDelete = '';
+    $('#goal-delete-modal').classList.add('hidden');
+  }
+
+  function beginGoalDelete(goalId) {
+    const goal = state.savingsGoals.find(item => item.id === goalId);
+    if (!goal) return;
+    goalToDelete = goal.id;
+    $('#goal-delete-name').textContent = goal.name;
+    $('#goal-delete-modal').classList.remove('hidden');
+  }
+
+  function saveGoalFromForm(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const id = form.elements.id.value;
+    const existing = state.savingsGoals.find(goal => goal.id === id);
+    const name = form.elements.name.value.trim();
+    const targetAmount = Number(form.elements.targetAmount.value);
+    const savedAmount = Number(form.elements.savedAmount.value);
+    const contributionPerPeriod = Number(form.elements.contributionPerPeriod.value);
+    const targetDate = form.elements.targetDate.value;
+    let error = '';
+    if (!name) error = 'Wpisz nazwę celu.';
+    else if (!Number.isFinite(targetAmount) || targetAmount <= 0) error = 'Kwota docelowa musi być większa od 0 zł.';
+    else if (!Number.isFinite(savedAmount) || savedAmount < 0) error = 'Kwota już odłożona nie może być ujemna.';
+    else if (savedAmount > targetAmount) error = 'Kwota już odłożona nie może przekraczać celu.';
+    else if (!Number.isFinite(contributionPerPeriod) || contributionPerPeriod <= 0) error = 'Kwota odkładana w każdym okresie musi być większa od 0 zł.';
+    else if (targetDate && (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate) || Core.dateKey(Core.parseDateKey(targetDate)) !== targetDate)) error = 'Wybierz poprawny termin celu.';
+    if (error) {
+      $('#goal-form-error').textContent = error;
+      $('#goal-form-error').classList.remove('hidden');
+      return;
+    }
+
+    const candidate = {
+      id: existing?.id || (crypto.randomUUID ? crypto.randomUUID() : `goal-${Date.now()}`),
+      name,
+      targetAmount: Core.roundGoalMoney(targetAmount),
+      savedAmount: Core.roundGoalMoney(savedAmount),
+      contributionPerPeriod: Core.roundGoalMoney(contributionPerPeriod),
+      targetDate,
+      active: existing?.active !== false,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      lastAccruedPeriod: selectedPeriod.start
+    };
+    const proposedGoals = existing
+      ? state.savingsGoals.map(goal => goal.id === existing.id ? candidate : goal)
+      : [...state.savingsGoals, candidate];
+    const budgetConfigured = hasBudget();
+    const plannedSavings = Core.poolAmounts(getBudget()).savings;
+    const overAllocation = budgetConfigured && Core.activeGoalContributions(proposedGoals) > plannedSavings;
+    if (overAllocation && form.dataset.confirmOverage !== 'true') {
+      $('#goal-form-error').textContent = `⚠️ Po zapisaniu cele będą wymagały ${money(Core.activeGoalContributions(proposedGoals))} zł, a pula Oszczędności wynosi ${money(plannedSavings)} zł / okres. Zwiększ pulę albo zapisz świadomie mimo ostrzeżenia.`;
+      $('#goal-form-error').classList.remove('hidden');
+      form.dataset.confirmOverage = 'true';
+      form.querySelector('[type=submit]').textContent = existing ? 'Zapisz mimo ostrzeżenia' : 'Dodaj mimo ostrzeżenia';
+      return;
+    }
+    state.savingsGoals = proposedGoals;
+    save();
+    closeGoalForm();
+    update();
+    showToast(existing ? 'Cel zaktualizowany' : 'Cel dodany');
+  }
+
   function updateCategoryPoolHint() {
     const selected = Core.categoryFor($('#category-select').value);
     const pool = Core.pools.find(item => item.id === selected.poolId);
@@ -290,7 +478,49 @@
   $$('[data-action=add]').forEach(button => button.addEventListener('click', openModal));
   $$('[data-action=close]').forEach(button => button.addEventListener('click', closeModal));
   $('#expense-modal').addEventListener('click', event => { if (event.target.id === 'expense-modal') closeModal(); });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
+  $('#add-goal').addEventListener('click', () => openGoalForm());
+  $('#goal-form').addEventListener('submit', saveGoalFromForm);
+  $('#goal-form').addEventListener('input', event => {
+    const form = event.currentTarget;
+    if (form.dataset.confirmOverage) {
+      form.dataset.confirmOverage = '';
+      form.querySelector('[type=submit]').textContent = form.elements.id.value ? 'Zapisz zmiany' : 'Dodaj cel';
+      $('#goal-form-error').classList.add('hidden');
+    }
+  });
+  $$('[data-action=close-goal]').forEach(button => button.addEventListener('click', closeGoalForm));
+  $('#goal-modal').addEventListener('click', event => { if (event.target.id === 'goal-modal') closeGoalForm(); });
+  $$('[data-action=cancel-goal-delete]').forEach(button => button.addEventListener('click', closeGoalDelete));
+  $('#goal-delete-modal').addEventListener('click', event => { if (event.target.id === 'goal-delete-modal') closeGoalDelete(); });
+  $('#goal-delete-modal [data-action=confirm-goal-delete]').addEventListener('click', () => {
+    if (!goalToDelete) return;
+    state.savingsGoals = state.savingsGoals.filter(goal => goal.id !== goalToDelete);
+    save();
+    closeGoalDelete();
+    update();
+    showToast('Cel usunięty');
+  });
+  $('#goals-list').addEventListener('click', event => {
+    const button = event.target.closest('[data-goal-action]');
+    if (!button) return;
+    const goal = state.savingsGoals.find(item => item.id === button.dataset.goalId);
+    if (!goal) return;
+    if (button.dataset.goalAction === 'edit') openGoalForm(goal.id);
+    else if (button.dataset.goalAction === 'delete') beginGoalDelete(goal.id);
+    else if (button.dataset.goalAction === 'pause') {
+      goal.active = !goal.active;
+      goal.lastAccruedPeriod = selectedPeriod.start;
+      save();
+      update();
+      showToast(goal.active ? 'Cel wznowiony' : 'Cel wstrzymany');
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    closeModal();
+    closeGoalForm();
+    closeGoalDelete();
+  });
 
   $('#expense-form').addEventListener('submit', event => {
     event.preventDefault();
@@ -370,6 +600,7 @@
   $('#payday-select').addEventListener('change', event => {
     state.payday = Core.normalizedPayday(event.target.value);
     selectedPeriod = Core.periodForDate(todayKey, state.payday);
+    state.savingsGoals.forEach(goal => { goal.lastAccruedPeriod = selectedPeriod.start; });
     $('#payday-select').value = String(state.payday);
     save();
     update();

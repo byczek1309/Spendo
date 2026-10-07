@@ -27,6 +27,11 @@
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
   }
 
+  function roundGoalMoney(value) {
+    if (!Number.isFinite(value)) return 0;
+    return Number.isFinite(value * 100) ? roundMoney(value) : value;
+  }
+
   function dateKey(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
@@ -114,7 +119,79 @@
   }
 
   function blankState() {
-    return { schemaVersion: 2, payday: 1, budgets: {}, expenses: [], theme: 'system' };
+    return { schemaVersion: 2, payday: 1, budgets: {}, expenses: [], savingsGoals: [], theme: 'system' };
+  }
+
+  function normalizeSavingsGoal(goal, index) {
+    const source = goal && typeof goal === 'object' && !Array.isArray(goal) ? goal : {};
+    const amount = (value, fallback = 0) => Number.isFinite(Number(value)) && Number(value) >= 0 ? roundGoalMoney(Number(value)) : fallback;
+    const targetDate = typeof source.targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.targetDate)
+      && dateKey(parseDateKey(source.targetDate)) === source.targetDate ? source.targetDate : '';
+    return {
+      ...source,
+      id: typeof source.id === 'string' && source.id ? source.id : `goal-${index}`,
+      name: typeof source.name === 'string' ? source.name.trim() : '',
+      targetAmount: amount(source.targetAmount),
+      savedAmount: amount(source.savedAmount),
+      contributionPerPeriod: amount(source.contributionPerPeriod),
+      targetDate,
+      active: source.active !== false,
+      createdAt: typeof source.createdAt === 'string' ? source.createdAt : '',
+      lastAccruedPeriod: typeof source.lastAccruedPeriod === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.lastAccruedPeriod)
+        && dateKey(parseDateKey(source.lastAccruedPeriod)) === source.lastAccruedPeriod ? source.lastAccruedPeriod : ''
+    };
+  }
+
+  function goalRemaining(goal) {
+    const target = Number(goal?.targetAmount);
+    const saved = Number(goal?.savedAmount);
+    if (!Number.isFinite(target) || !Number.isFinite(saved) || target <= 0) return 0;
+    return roundGoalMoney(Math.max(0, target - saved));
+  }
+
+  function goalProgress(goal) {
+    const target = Number(goal?.targetAmount);
+    const saved = Number(goal?.savedAmount);
+    if (!Number.isFinite(target) || !Number.isFinite(saved) || target <= 0) return 0;
+    return Math.min(100, Math.max(0, saved / target * 100));
+  }
+
+  function goalPeriodsRemaining(goal) {
+    const remaining = goalRemaining(goal);
+    const contribution = Number(goal?.contributionPerPeriod);
+    if (remaining <= 0 || !Number.isFinite(contribution) || contribution <= 0) return 0;
+    const periods = remaining / contribution;
+    return Number.isFinite(periods) ? Math.ceil(periods) : 0;
+  }
+
+  function accrueGoal(goal, periods) {
+    const target = Number(goal?.targetAmount);
+    const saved = Number(goal?.savedAmount);
+    const contribution = Number(goal?.contributionPerPeriod);
+    const count = Number(periods);
+    if (![target, saved, contribution, count].every(Number.isFinite) || target <= 0 || contribution <= 0 || count <= 0) {
+      return Number.isFinite(saved) && saved >= 0 ? roundGoalMoney(saved) : 0;
+    }
+    return roundGoalMoney(Math.min(target, saved + contribution * Math.floor(count)));
+  }
+
+  function activeGoalContributions(goals) {
+    const total = (Array.isArray(goals) ? goals : []).reduce((sum, goal) => {
+      const contribution = Number(goal?.contributionPerPeriod);
+      if (goal?.active === false || goalRemaining(goal) <= 0 || !Number.isFinite(contribution) || contribution <= 0) return sum;
+      const next = sum + contribution;
+      return Number.isFinite(next) ? next : Number.MAX_VALUE;
+    }, 0);
+    return roundGoalMoney(total);
+  }
+
+  function requiredGoalContribution(remaining, availablePeriods) {
+    const amount = Number(remaining);
+    const periods = Number(availablePeriods);
+    if (!Number.isFinite(amount) || !Number.isFinite(periods) || amount <= 0 || periods <= 0) return 0;
+    const required = amount / periods;
+    if (!Number.isFinite(required)) return 0;
+    return Number.isFinite(required * 100) ? Math.ceil(required * 100) / 100 : required;
   }
 
   function normalizeState(raw) {
@@ -124,9 +201,12 @@
       ...source,
       budgets: source.budgets && typeof source.budgets === 'object' && !Array.isArray(source.budgets) ? source.budgets : {},
       expenses: Array.isArray(source.expenses) ? source.expenses : [],
+      savingsGoals: Array.isArray(source.savingsGoals)
+        ? source.savingsGoals.filter(goal => goal && typeof goal === 'object' && !Array.isArray(goal)).map(normalizeSavingsGoal)
+        : [],
       payday: normalizedPayday(source.payday)
     };
-    let migrated = source.schemaVersion !== 2 || source.payday !== state.payday;
+    let migrated = source.schemaVersion !== 2 || source.payday !== state.payday || !Array.isArray(source.savingsGoals);
 
     state.expenses = state.expenses.map((expense, index) => {
       if (!expense || typeof expense !== 'object' || Array.isArray(expense)) {
@@ -244,6 +324,13 @@
     expensesInPeriod,
     poolSpending,
     dailyPlan,
+    goalRemaining,
+    goalProgress,
+    goalPeriodsRemaining,
+    accrueGoal,
+    activeGoalContributions,
+    requiredGoalContribution,
+    roundGoalMoney,
     roundMoney
   });
 })(window);
