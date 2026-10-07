@@ -71,8 +71,6 @@
     const spentLife = spending.life;
     const percentage = amounts.life > 0 ? Math.min(100, Math.max(0, spentLife / amounts.life * 100)) : (spentLife > 0 ? 100 : 0);
 
-    $('#month-label').textContent = periodLabel(selectedPeriod);
-    $('#month-input').value = selectedPeriod.planMonth;
     $('#today-label').textContent = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(today).replace(/^./, char => char.toLocaleUpperCase('pl-PL'));
     $('#screen-today').classList.toggle('needs-budget', !configured);
     $('#budget-setup-card').classList.toggle('hidden', configured);
@@ -211,7 +209,7 @@
   }
 
   $('#category-select').innerHTML = Core.categories.map(item => `<option value="${item.name}">${item.icon} ${item.name}</option>`).join('');
-  $('#payday-select').innerHTML = Array.from({ length: 31 }, (_, index) => `<option value="${index + 1}">${index + 1}. dzień miesiąca</option>`).join('');
+  $('#payday-select').innerHTML = Array.from({ length: 31 }, (_, index) => `<option value="${index + 1}">${index + 1}</option>`).join('');
   $('#category-select').addEventListener('change', updateCategoryPoolHint);
   $$('[data-screen]').forEach(button => button.addEventListener('click', () => showScreen(button.dataset.screen)));
   $$('[data-action=add]').forEach(button => button.addEventListener('click', openModal));
@@ -260,13 +258,6 @@
     showToast('Plan zapisany');
   });
 
-  $('#month-input').addEventListener('change', event => {
-    if (!event.target.value) return;
-    selectedPeriod = Core.periodStartingInMonth(event.target.value, state.payday);
-    selectedMonth = event.target.value;
-    selectedDay = '';
-    update();
-  });
   $('#prev-month').addEventListener('click', () => shiftMonth(-1));
   $('#next-month').addEventListener('click', () => shiftMonth(1));
   function shiftMonth(offset) {
@@ -305,7 +296,6 @@
     state.payday = Core.normalizedPayday(event.target.value);
     selectedPeriod = Core.periodForDate(todayKey, state.payday);
     $('#payday-select').value = String(state.payday);
-    $('#payday-heading').textContent = `Wypłata: ${state.payday}. dzień miesiąca`;
     save();
     update();
     showToast('Okres budżetowy zaktualizowany');
@@ -322,7 +312,6 @@
   });
 
   $('#payday-select').value = String(state.payday);
-  $('#payday-heading').textContent = `Wypłata: ${state.payday}. dzień miesiąca`;
   applyTheme();
   update();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('/sw.js').catch(() => {});
