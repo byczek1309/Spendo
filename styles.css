@@ -475,3 +475,69 @@ body[data-theme='dark'] .brand-mark { background: #a6c0b1; color: #172019; }
 .payday-config select { width: 100%; }
 .payday-period-title { margin-top: 3px; color: var(--muted); font-size: 11px; }
 .payday-config > strong { font: 600 14px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
+
+/* V1.2 statistics screen */
+.tab { width: min(150px, 20%); min-width: 0; padding-right: 2px; padding-left: 2px; }
+.tab small { font-size: 9px; white-space: nowrap; }
+.stats-content { display: grid; gap: 14px; }
+.stats-spend-card {
+  padding: 27px 24px 23px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+}
+.stats-spend-card .eyebrow { display: block; }
+.stats-spend-card > strong { display: block; margin: 12px 0 2px; font: 700 clamp(38px, 9vw, 52px)/1.1 'Manrope', sans-serif; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+.stats-spend-card p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+.stats-insights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.stat-insight { min-width: 0; min-height: 105px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 7px; padding: 15px; }
+.stat-insight .eyebrow { font-size: 8px; letter-spacing: .08em; }
+.stat-insight > strong { max-width: 100%; overflow: hidden; font: 700 14px 'Manrope', sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.stat-insight-detail { color: var(--muted); font-size: 11px; }
+.stat-comparison { grid-column: 1 / -1; min-height: 84px; }
+.stat-comparison > strong { max-width: 100%; overflow: visible; font-size: 15px; text-overflow: clip; white-space: normal; }
+.stat-comparison > strong.lower-spending { color: var(--accent-strong); }
+.stat-comparison > strong.higher-spending { color: #aa7257; }
+.stats-panel { padding: 20px; }
+.stats-section-heading { margin-bottom: 17px; }
+.stats-section-heading h3 { margin: 0 0 5px; font: 700 17px 'Manrope', sans-serif; letter-spacing: -.025em; }
+.stats-section-heading p { margin: 0; color: var(--muted); font-size: 11px; }
+.category-chart { display: grid; gap: 15px; }
+.category-row { min-width: 0; }
+.category-row-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 7px; font-size: 12px; }
+.category-row-head > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.category-row-head > strong { flex: 0 0 auto; font: 600 12px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
+.category-track, .stats-progress { height: 6px; overflow: hidden; border-radius: 8px; background: var(--surface-soft); }
+.category-track > span, .stats-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
+.life-plan-panel { margin-bottom: 20px; }
+.life-values { display: grid; gap: 0; margin: 2px 0 16px; }
+.life-values > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.life-values > div:last-child { border-bottom: 0; }
+.life-values span { color: var(--muted); font-size: 12px; }
+.life-values strong { font: 600 14px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stats-plan-status { margin: 13px 0 0; color: var(--muted); font-size: 12px; }
+.stats-no-plan { padding-top: 8px; }
+.stats-no-plan p { margin: 0 0 6px; color: var(--muted); font-size: 12px; }
+.stats-empty { margin-top: 8px; padding: 24px 20px; text-align: center; }
+.stats-empty strong { display: block; margin-bottom: 8px; font: 700 16px 'Manrope', sans-serif; }
+.stats-empty p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+@media (min-width: 760px) {
+  .stats-content { gap: 16px; }
+  .stats-insights { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stat-comparison { grid-column: auto; }
+  .stats-spend-card { padding: 31px 30px 27px; }
+  .stats-panel { padding: 23px; }
+  .life-values { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .life-values > div { display: grid; align-content: start; gap: 7px; border-bottom: 0; }
+  .life-values strong { font-size: 16px; }
+}
+@media (max-width: 420px) {
+  .tab small { font-size: 8.5px; letter-spacing: -.02em; }
+  .stats-spend-card { padding: 24px 18px 20px; border-radius: 22px; }
+  .stats-insights { gap: 9px; }
+  .stat-insight { min-height: 100px; padding: 12px; }
+  .stats-panel { padding: 17px 15px; }
+}

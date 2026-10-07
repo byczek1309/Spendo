@@ -102,6 +102,7 @@
     renderCalendar();
     renderHistory();
     renderBudget(budget, amounts, spending);
+    renderStats(expenses, amounts);
   }
 
   function expenseRow(expense) {
@@ -172,6 +173,80 @@
     $('#budget-form').elements.bills.value = configured ? budget.bills : '';
     $('#budget-form').elements.fuel.value = configured ? budget.fuel : '';
     $('#budget-form').elements.savings.value = configured ? budget.savings : '';
+  }
+
+  function renderStats(expenses, amounts) {
+    $('#stats-period').textContent = periodLabel(selectedPeriod);
+    const hasExpenses = expenses.length > 0;
+    $('#stats-empty').classList.toggle('hidden', hasExpenses);
+    $('#stats-content').classList.toggle('hidden', !hasExpenses);
+    if (!hasExpenses) return;
+
+    const total = Core.roundMoney(expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0));
+    $('#stats-total').textContent = money(total);
+    $('#stats-daily-average').textContent = money(total / selectedPeriod.days);
+
+    const largest = expenses.reduce((best, expense) => Number(expense.amount) > Number(best.amount) ? expense : best, expenses[0]);
+    const largestCategory = category(largest.category);
+    $('#stats-largest-category').textContent = `${largestCategory.icon} ${largestCategory.name}`;
+    $('#stats-largest-amount').textContent = `${money(largest.amount)} zł`;
+
+    const categoryTotals = new Map(Core.categories.map(item => [item.name, { category: item, amount: 0, count: 0 }]));
+    expenses.forEach(expense => {
+      const item = category(expense.category);
+      const aggregate = categoryTotals.get(item.name);
+      aggregate.amount += Number(expense.amount) || 0;
+      aggregate.count += 1;
+    });
+    const ranked = [...categoryTotals.values()];
+    ranked.forEach(item => { item.amount = Core.roundMoney(item.amount); });
+    const mostFrequent = ranked.reduce((best, item) => item.count > best.count ? item : best, ranked[0]);
+    $('#stats-frequent-category').textContent = `${mostFrequent.category.icon} ${mostFrequent.category.name}`;
+    $('#stats-frequent-count').textContent = `${mostFrequent.count} ${mostFrequent.count === 1 ? 'wydatek' : 'wydatków'}`;
+
+    const previousDay = Core.parseDateKey(selectedPeriod.start);
+    previousDay.setDate(previousDay.getDate() - 1);
+    const previousPeriod = Core.periodForDate(Core.dateKey(previousDay), state.payday);
+    const previousExpenses = periodExpenses(previousPeriod);
+    const previousLifeSpent = Core.poolSpending(previousExpenses).life;
+    const currentLifeSpent = Core.poolSpending(expenses).life;
+    const comparison = $('#stats-comparison');
+    if (previousLifeSpent > 0) {
+      const change = (currentLifeSpent - previousLifeSpent) / previousLifeSpent * 100;
+      const sign = change < 0 ? '−' : change > 0 ? '+' : '';
+      comparison.textContent = `${sign}${new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Math.abs(change))}%`;
+      comparison.classList.toggle('lower-spending', change < 0);
+      comparison.classList.toggle('higher-spending', change > 0);
+    } else {
+      comparison.textContent = 'Brak danych do porównania';
+      comparison.classList.remove('lower-spending', 'higher-spending');
+    }
+
+    const chart = $('#stats-categories');
+    chart.innerHTML = ranked.map(item => {
+      const share = total > 0 ? item.amount / total * 100 : 0;
+      return `<div class="category-row"><div class="category-row-head"><span>${item.category.icon} ${item.category.name}</span><strong>${money(item.amount)} zł</strong></div><div class="category-track" role="img" aria-label="${item.category.name}: ${money(item.amount)} zł"><span style="width:${share}%"></span></div></div>`;
+    }).join('');
+
+    const configured = hasBudget();
+    $('#stats-life-values').classList.toggle('hidden', !configured);
+    $('#stats-life-progress').classList.toggle('hidden', !configured);
+    $('#stats-life-status').classList.toggle('hidden', !configured);
+    $('#stats-no-plan').classList.toggle('hidden', configured);
+    if (!configured) return;
+
+    const lifeRemaining = Core.roundMoney(amounts.life - currentLifeSpent);
+    const progress = amounts.life > 0 ? Math.min(100, Math.max(0, currentLifeSpent / amounts.life * 100)) : (currentLifeSpent > 0 ? 100 : 0);
+    const elapsedDays = Math.min(selectedPeriod.days, Math.max(1, Core.dayCount(selectedPeriod.start, todayKey)));
+    const plannedToDate = amounts.life * elapsedDays / selectedPeriod.days;
+    $('#stats-life-planned').textContent = `${money(amounts.life)} zł`;
+    $('#stats-life-spent').textContent = `${money(currentLifeSpent)} zł`;
+    $('#stats-life-remaining').textContent = `${money(lifeRemaining)} zł`;
+    $('#stats-life-progress').querySelector('span').style.width = `${progress}%`;
+    $('#stats-life-progress').setAttribute('aria-valuenow', String(Math.round(progress)));
+    $('#stats-life-status').textContent = currentLifeSpent > plannedToDate
+      ? '⚠️ Wydajesz szybciej, niż wynika z planu.'
+      : '✓ Wydajesz zgodnie z planem.';
   }
 
   function showScreen(name) {
