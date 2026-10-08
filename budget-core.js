@@ -2,7 +2,7 @@
   'use strict';
 
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const STATE_SCHEMA_VERSION = 3;
+  const STATE_SCHEMA_VERSION = 4;
   const pools = [
     { id: 'bills', icon: '🧾', name: 'Rachunki', field: 'bills' },
     { id: 'fuel', icon: '⛽', name: 'Paliwo', field: 'fuel' },
@@ -120,7 +120,21 @@
   }
 
   function blankState() {
-    return { schemaVersion: STATE_SCHEMA_VERSION, payday: 1, budgets: {}, expenses: [], savingsGoals: [], theme: 'system' };
+    return { schemaVersion: STATE_SCHEMA_VERSION, payday: 1, budgets: {}, expenses: [], savingsGoals: [], recurringBills: [], theme: 'system' };
+  }
+
+  function normalizeRecurringBill(bill, index) {
+    if (!bill || typeof bill !== 'object' || Array.isArray(bill)) return null;
+    const name = typeof bill.name === 'string' ? bill.name.trim() : '';
+    const amount = Number(bill.amount);
+    const roundedAmount = roundMoney(amount);
+    if (!name || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(roundedAmount) || roundedAmount <= 0) return null;
+    return {
+      ...bill,
+      id: typeof bill.id === 'string' && bill.id ? bill.id : `bill-${index}`,
+      name,
+      amount: roundedAmount
+    };
   }
 
   function normalizeSavingsGoal(goal, index) {
@@ -188,6 +202,16 @@
 
   function normalizeState(raw) {
     const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    let recurringBillsMigrated = !Array.isArray(source.recurringBills);
+    const recurringBills = (Array.isArray(source.recurringBills) ? source.recurringBills : [])
+      .map((bill, index) => {
+        const normalized = normalizeRecurringBill(bill, index);
+        if (!normalized || bill.id !== normalized.id || bill.name !== normalized.name || bill.amount !== normalized.amount) {
+          recurringBillsMigrated = true;
+        }
+        return normalized;
+      })
+      .filter(Boolean);
     const state = {
       ...blankState(),
       ...source,
@@ -196,11 +220,13 @@
       savingsGoals: Array.isArray(source.savingsGoals)
         ? source.savingsGoals.filter(goal => goal && typeof goal === 'object' && !Array.isArray(goal)).map(normalizeSavingsGoal)
         : [],
+      recurringBills,
       payday: normalizedPayday(source.payday)
     };
     let migrated = source.schemaVersion !== STATE_SCHEMA_VERSION
       || source.payday !== state.payday
       || !Array.isArray(source.savingsGoals)
+      || recurringBillsMigrated
       || (Array.isArray(source.savingsGoals) && source.savingsGoals.some(goal =>
         goal && typeof goal === 'object' && !Array.isArray(goal) && typeof goal.savedAmountConfirmed !== 'boolean'));
 
@@ -315,6 +341,7 @@
     poolForCategory,
     blankState,
     normalizeState,
+    normalizeRecurringBill,
     budgetForPeriod,
     poolAmounts,
     expensesInPeriod,

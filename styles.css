@@ -628,6 +628,24 @@ body[data-theme='dark'] .brand-mark { background: #a6c0b1; color: #172019; }
 .budget-no-active-goals .text-button { justify-self: start; min-height: 44px; padding: 0; }
 .budget-goal-allocation .goal-form-message { margin: 0; }
 .budget-goals-preserved-note { margin: -6px 2px 0; line-height: 1.45; }
+.recurring-bills-section { margin-top: 0; padding-top: 2px; }
+.recurring-bills-heading { align-items: center; margin-bottom: 10px; }
+.recurring-bills-heading h3 { margin: 4px 0 0; font: 700 17px 'Manrope', sans-serif; letter-spacing: -.025em; }
+.recurring-bills-heading .text-button { min-height: 44px; padding: 6px 0 4px 6px; }
+.recurring-bills-list { overflow: hidden; padding: 0 14px; }
+.recurring-bills-list:empty { display: none; }
+.recurring-bill-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.recurring-bill-row:last-child { border-bottom: 0; }
+.recurring-bill-copy { min-width: 0; }
+.recurring-bill-copy strong { display: block; overflow-wrap: anywhere; font: 600 13px 'Manrope', sans-serif; }
+.recurring-bill-copy small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+.recurring-bill-amount { font: 600 12px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recurring-bill-actions { display: flex; flex: 0 0 auto; gap: 2px; }
+.recurring-bill-actions .goal-icon-button { width: 44px; }
+.recurring-bills-empty { margin: 0; padding: 15px 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.recurring-bill-sheet { gap: 14px; }
+.recurring-bill-sheet > .field-hint { margin: -5px 0 0; line-height: 1.45; }
+.recurring-bill-sheet > .goal-form-message { margin: 0; }
 .goal-form-message { margin: -4px 0 0; padding: 11px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); font-size: 12px; line-height: 1.5; }
 .goal-delete-sheet p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .goal-delete-sheet p strong { color: var(--ink); }
@@ -645,4 +663,9 @@ body[data-theme='dark'] .danger-button { border-color: #49392e; background: #302
   .goal-name-block h3 { font-size: 14px; }
   .goal-actions { gap: 0; }
   .goal-icon-button { width: 36px; }
+  .recurring-bills-heading { gap: 6px; }
+  .recurring-bills-heading h3 { font-size: 15px; }
+  .recurring-bills-heading .text-button { font-size: 11px; }
+  .recurring-bill-row { gap: 7px; }
+  .recurring-bill-actions { gap: 0; }
 }

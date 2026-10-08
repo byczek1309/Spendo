@@ -24,6 +24,7 @@
   let toastTimer;
   let goalToDelete = '';
   let depositGoalId = '';
+  let billToDelete = '';
   let budgetGoalsSectionEnabled = null;
   let state;
   try {
@@ -265,6 +266,13 @@
     $('#budget-form').elements.fuel.value = configured ? budget.fuel : '';
     $('#budget-form').elements.savings.value = configured ? budget.savings : '';
     renderBudgetGoalAllocation();
+    renderRecurringBills();
+  }
+
+  function renderRecurringBills() {
+    const bills = state.recurringBills;
+    $('#recurring-bills-empty').classList.toggle('hidden', bills.length > 0);
+    $('#recurring-bills-list').innerHTML = bills.map(bill => `<div class="recurring-bill-row"><div class="recurring-bill-copy"><strong>${esc(bill.name)}</strong><small>Stały rachunek</small></div><strong class="recurring-bill-amount">${money(bill.amount)} zł</strong><div class="recurring-bill-actions"><button class="goal-icon-button" type="button" data-bill-action="edit" data-bill-id="${esc(bill.id)}" aria-label="Edytuj rachunek ${esc(bill.name)}">✎</button><button class="goal-icon-button danger-icon" type="button" data-bill-action="delete" data-bill-id="${esc(bill.id)}" aria-label="Usuń rachunek ${esc(bill.name)}">×</button></div></div>`).join('');
   }
 
   function renderBudgetGoalAllocation() {
@@ -461,6 +469,81 @@
     $('#goal-deposit-error').classList.add('hidden');
   }
 
+  function closeRecurringBillForm() {
+    $('#recurring-bill-modal').classList.add('hidden');
+    $('#recurring-bill-error').classList.add('hidden');
+  }
+
+  function openRecurringBillForm(billId = '') {
+    const form = $('#recurring-bill-form');
+    const bill = state.recurringBills.find(item => item.id === billId);
+    form.reset();
+    form.dataset.submitting = '';
+    form.elements.id.value = bill?.id || '';
+    form.elements.name.value = bill?.name || '';
+    form.elements.amount.value = bill ? money(bill.amount) : '';
+    $('#recurring-bill-modal-title').textContent = bill ? 'Edytuj rachunek' : 'Dodaj rachunek';
+    form.querySelector('[type=submit]').textContent = bill ? 'Zapisz zmiany' : 'Dodaj rachunek';
+    $('#recurring-bill-error').classList.add('hidden');
+    $('#recurring-bill-modal').classList.remove('hidden');
+    setTimeout(() => form.elements.name.focus(), 100);
+  }
+
+  function saveRecurringBill(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (form.dataset.submitting === 'true') return;
+    form.dataset.submitting = 'true';
+    const id = form.elements.id.value;
+    const existing = state.recurringBills.find(bill => bill.id === id);
+    const name = form.elements.name.value.trim();
+    const amount = parseDecimalAmount(form.elements.amount.value);
+    const roundedAmount = Core.roundMoney(amount);
+    let error = '';
+    if (!name) error = 'Wpisz nazwę rachunku.';
+    else if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(roundedAmount) || roundedAmount <= 0) error = 'Wpisz poprawną kwotę większą od 0 zł (do dwóch miejsc po przecinku).';
+    if (error) {
+      form.dataset.submitting = '';
+      $('#recurring-bill-error').textContent = error;
+      $('#recurring-bill-error').classList.remove('hidden');
+      return;
+    }
+
+    const bill = {
+      id: existing?.id || (window.crypto?.randomUUID?.() || `bill-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+      name,
+      amount: roundedAmount
+    };
+    if (existing) state.recurringBills = state.recurringBills.map(item => item.id === existing.id ? bill : item);
+    else state.recurringBills.push(bill);
+    save();
+    closeRecurringBillForm();
+    update();
+    showToast(existing ? 'Rachunek zaktualizowany' : 'Rachunek dodany');
+  }
+
+  function beginRecurringBillDelete(billId) {
+    const bill = state.recurringBills.find(item => item.id === billId);
+    if (!bill) return;
+    billToDelete = bill.id;
+    $('#recurring-bill-delete-name').textContent = bill.name;
+    $('#recurring-bill-delete-modal').classList.remove('hidden');
+  }
+
+  function closeRecurringBillDelete() {
+    billToDelete = '';
+    $('#recurring-bill-delete-modal').classList.add('hidden');
+  }
+
+  function confirmRecurringBillDelete() {
+    if (!billToDelete) return;
+    state.recurringBills = state.recurringBills.filter(bill => bill.id !== billToDelete);
+    save();
+    closeRecurringBillDelete();
+    update();
+    showToast('Rachunek usunięty');
+  }
+
   function saveGoalDeposit(event) {
     event.preventDefault();
     const goal = state.savingsGoals.find(item => item.id === depositGoalId);
@@ -579,6 +662,20 @@
   $('#goal-deposit-form').addEventListener('submit', saveGoalDeposit);
   $$('[data-action=close-deposit]').forEach(button => button.addEventListener('click', closeDepositForm));
   $('#goal-deposit-modal').addEventListener('click', event => { if (event.target.id === 'goal-deposit-modal') closeDepositForm(); });
+  $('#add-recurring-bill').addEventListener('click', () => openRecurringBillForm());
+  $('#recurring-bill-form').addEventListener('submit', saveRecurringBill);
+  $('#recurring-bill-form').addEventListener('input', () => $('#recurring-bill-error').classList.add('hidden'));
+  $$('[data-action=close-recurring-bill]').forEach(button => button.addEventListener('click', closeRecurringBillForm));
+  $('#recurring-bill-modal').addEventListener('click', event => { if (event.target.id === 'recurring-bill-modal') closeRecurringBillForm(); });
+  $('#recurring-bills-list').addEventListener('click', event => {
+    const button = event.target.closest('[data-bill-action]');
+    if (!button) return;
+    if (button.dataset.billAction === 'edit') openRecurringBillForm(button.dataset.billId);
+    else if (button.dataset.billAction === 'delete') beginRecurringBillDelete(button.dataset.billId);
+  });
+  $$('[data-action=cancel-bill-delete]').forEach(button => button.addEventListener('click', closeRecurringBillDelete));
+  $('#recurring-bill-delete-modal').addEventListener('click', event => { if (event.target.id === 'recurring-bill-delete-modal') closeRecurringBillDelete(); });
+  $('#recurring-bill-delete-modal [data-action=confirm-bill-delete]').addEventListener('click', confirmRecurringBillDelete);
   $$('[data-action=cancel-goal-delete]').forEach(button => button.addEventListener('click', closeGoalDelete));
   $('#goal-delete-modal').addEventListener('click', event => { if (event.target.id === 'goal-delete-modal') closeGoalDelete(); });
   $('#goal-delete-modal [data-action=confirm-goal-delete]').addEventListener('click', () => {
@@ -611,6 +708,8 @@
     closeGoalForm();
     closeGoalDelete();
     closeDepositForm();
+    closeRecurringBillForm();
+    closeRecurringBillDelete();
   });
 
   $('#expense-form').addEventListener('submit', event => {
