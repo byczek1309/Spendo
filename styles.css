@@ -632,17 +632,27 @@ body[data-theme='dark'] .brand-mark { background: #a6c0b1; color: #172019; }
 .recurring-bills-heading { align-items: center; margin-bottom: 10px; }
 .recurring-bills-heading h3 { margin: 4px 0 0; font: 700 17px 'Manrope', sans-serif; letter-spacing: -.025em; }
 .recurring-bills-heading .text-button { min-height: 44px; padding: 6px 0 4px 6px; }
+.recurring-bills-help { margin: -3px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .recurring-bills-list { overflow: hidden; padding: 0 14px; }
 .recurring-bills-list:empty { display: none; }
-.recurring-bill-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.recurring-bill-row { min-width: 0; display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .recurring-bill-row:last-child { border-bottom: 0; }
+.form-panel label.recurring-bill-select { min-width: 0; min-height: 48px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; margin: 0; padding: 3px 0; cursor: pointer; }
+.recurring-bill-select input { width: 24px; height: 24px; justify-self: center; margin: 0; accent-color: var(--accent-strong); }
 .recurring-bill-copy { min-width: 0; }
 .recurring-bill-copy strong { display: block; overflow-wrap: anywhere; font: 600 13px 'Manrope', sans-serif; }
 .recurring-bill-copy small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
 .recurring-bill-amount { font: 600 12px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.recurring-bill-actions { display: flex; flex: 0 0 auto; gap: 2px; }
+.recurring-bill-actions { justify-self: end; display: flex; min-height: 44px; gap: 2px; }
 .recurring-bill-actions .goal-icon-button { width: 44px; }
+.recurring-bill-archived { align-items: center; padding: 0 4px; color: var(--muted); font-size: 10px; }
 .recurring-bills-empty { margin: 0; padding: 15px 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.bill-plan-summary { display: grid; gap: 8px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); }
+.bill-plan-summary > div { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; }
+.bill-plan-summary strong { flex: 0 0 auto; color: var(--ink); font: 600 12px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
+.bill-plan-summary .bill-plan-grand-total { padding-top: 9px; border-top: 1px solid var(--line); color: var(--ink); font-weight: 700; }
+.bill-plan-summary .bill-plan-grand-total strong { font-size: 14px; }
+.recurring-bills-section > .goal-form-message { margin: 0; }
 .recurring-bill-sheet { gap: 14px; }
 .recurring-bill-sheet > .field-hint { margin: -5px 0 0; line-height: 1.45; }
 .recurring-bill-sheet > .goal-form-message { margin: 0; }

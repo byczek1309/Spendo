@@ -2,7 +2,7 @@
   'use strict';
 
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const STATE_SCHEMA_VERSION = 4;
+  const STATE_SCHEMA_VERSION = 5;
   const pools = [
     { id: 'bills', icon: '🧾', name: 'Rachunki', field: 'bills' },
     { id: 'fuel', icon: '⛽', name: 'Paliwo', field: 'fuel' },
@@ -137,6 +137,61 @@
     };
   }
 
+  function normalizePlannedBillSnapshot(bill) {
+    if (!bill || typeof bill !== 'object' || Array.isArray(bill)) return null;
+    const id = typeof bill.id === 'string' ? bill.id : '';
+    const name = typeof bill.name === 'string' ? bill.name.trim() : '';
+    const amount = Number(bill.amount);
+    const roundedAmount = roundMoney(amount);
+    if (!id || !name || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(roundedAmount) || roundedAmount <= 0) return null;
+    return { id, name, amount: roundedAmount };
+  }
+
+  function normalizeBudgetPlans(sourceBudgets) {
+    const budgets = {};
+    let migrated = false;
+    const entries = sourceBudgets && typeof sourceBudgets === 'object' && !Array.isArray(sourceBudgets)
+      ? Object.entries(sourceBudgets)
+      : [];
+
+    entries.forEach(([periodKey, plan]) => {
+      if (!plan || typeof plan !== 'object' || Array.isArray(plan)) {
+        budgets[periodKey] = plan;
+        return;
+      }
+
+      const hasSplitData = Array.isArray(plan.selectedBills)
+        && Number.isFinite(Number(plan.otherBills))
+        && Number(plan.otherBills) >= 0;
+      if (!hasSplitData) {
+        const oldBills = Number(plan.bills);
+        const otherBills = Number.isFinite(oldBills) && oldBills >= 0 ? roundMoney(oldBills) : 0;
+        budgets[periodKey] = { ...plan, otherBills, selectedBills: [] };
+        if (!Array.isArray(plan.selectedBills) || plan.otherBills !== otherBills || plan.selectedBills.length > 0) migrated = true;
+        return;
+      }
+
+      const selectedBills = [];
+      const seenIds = new Set();
+      plan.selectedBills.forEach(bill => {
+        const normalized = normalizePlannedBillSnapshot(bill);
+        if (!normalized || seenIds.has(normalized.id)) {
+          migrated = true;
+          return;
+        }
+        seenIds.add(normalized.id);
+        selectedBills.push(normalized);
+        if (bill.id !== normalized.id || bill.name !== normalized.name || bill.amount !== normalized.amount) migrated = true;
+      });
+      const otherBills = roundMoney(Number(plan.otherBills));
+      if (plan.otherBills !== otherBills || selectedBills.length !== plan.selectedBills.length) migrated = true;
+      budgets[periodKey] = { ...plan, otherBills, selectedBills };
+    });
+
+    if (!sourceBudgets || typeof sourceBudgets !== 'object' || Array.isArray(sourceBudgets)) migrated = true;
+    return { budgets, migrated };
+  }
+
   function normalizeSavingsGoal(goal, index) {
     const source = goal && typeof goal === 'object' && !Array.isArray(goal) ? goal : {};
     const amount = (value, fallback = 0) => Number.isFinite(Number(value)) && Number(value) >= 0 ? roundGoalMoney(Number(value)) : fallback;
@@ -202,6 +257,7 @@
 
   function normalizeState(raw) {
     const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const budgetPlans = normalizeBudgetPlans(source.budgets);
     let recurringBillsMigrated = !Array.isArray(source.recurringBills);
     const recurringBills = (Array.isArray(source.recurringBills) ? source.recurringBills : [])
       .map((bill, index) => {
@@ -215,7 +271,7 @@
     const state = {
       ...blankState(),
       ...source,
-      budgets: source.budgets && typeof source.budgets === 'object' && !Array.isArray(source.budgets) ? source.budgets : {},
+      budgets: budgetPlans.budgets,
       expenses: Array.isArray(source.expenses) ? source.expenses : [],
       savingsGoals: Array.isArray(source.savingsGoals)
         ? source.savingsGoals.filter(goal => goal && typeof goal === 'object' && !Array.isArray(goal)).map(normalizeSavingsGoal)
@@ -225,6 +281,7 @@
     };
     let migrated = source.schemaVersion !== STATE_SCHEMA_VERSION
       || source.payday !== state.payday
+      || budgetPlans.migrated
       || !Array.isArray(source.savingsGoals)
       || recurringBillsMigrated
       || (Array.isArray(source.savingsGoals) && source.savingsGoals.some(goal =>
