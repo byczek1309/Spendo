@@ -652,6 +652,23 @@ body[data-theme='dark'] .brand-mark { background: #a6c0b1; color: #172019; }
 .bill-plan-summary strong { flex: 0 0 auto; color: var(--ink); font: 600 12px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
 .bill-plan-summary .bill-plan-grand-total { padding-top: 9px; border-top: 1px solid var(--line); color: var(--ink); font-weight: 700; }
 .bill-plan-summary .bill-plan-grand-total strong { font-size: 14px; }
+.bill-payments-panel { display: grid; gap: 14px; margin-top: 16px; padding: 18px; }
+.bill-payments-heading h3 { margin: 4px 0 0; font: 700 17px 'Manrope', sans-serif; letter-spacing: -.025em; }
+.bill-payments-empty, .bill-payments-disclosure { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.bill-payments-summary { display: grid; gap: 8px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface-soft); }
+.bill-payments-summary > div { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; }
+.bill-payments-summary strong { flex: 0 0 auto; color: var(--ink); font: 600 12px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
+.bill-payments-progress { height: 7px; overflow: hidden; border-radius: 9px; background: var(--surface-soft); }
+.bill-payments-progress > span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
+.bill-payments-list { display: grid; }
+.bill-payment-row { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.bill-payment-copy { min-width: 0; display: grid; gap: 4px; }
+.bill-payment-copy strong { overflow-wrap: anywhere; font: 600 13px 'Manrope', sans-serif; }
+.bill-payment-copy small { color: var(--muted); font-size: 11px; }
+.bill-payment-copy .is-paid { color: var(--accent-strong); font-weight: 600; }
+.bill-payment-toggle { min-height: 44px; flex: 0 0 auto; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 11px; font-weight: 600; }
+.bill-payment-toggle.is-paid { color: var(--accent-strong); }
+.bill-payment-toggle:active { background: var(--surface-soft); }
 .recurring-bills-section > .goal-form-message { margin: 0; }
 .recurring-bill-sheet { gap: 14px; }
 .recurring-bill-sheet > .field-hint { margin: -5px 0 0; line-height: 1.45; }

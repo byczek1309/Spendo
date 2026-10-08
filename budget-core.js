@@ -2,7 +2,7 @@
   'use strict';
 
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const STATE_SCHEMA_VERSION = 5;
+  const STATE_SCHEMA_VERSION = 6;
   const pools = [
     { id: 'bills', icon: '🧾', name: 'Rachunki', field: 'bills' },
     { id: 'fuel', icon: '⛽', name: 'Paliwo', field: 'fuel' },
@@ -144,7 +144,7 @@
     const amount = Number(bill.amount);
     const roundedAmount = roundMoney(amount);
     if (!id || !name || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(roundedAmount) || roundedAmount <= 0) return null;
-    return { id, name, amount: roundedAmount };
+    return { id, name, amount: roundedAmount, paid: bill.paid === true };
   }
 
   function normalizeBudgetPlans(sourceBudgets) {
@@ -181,7 +181,7 @@
         }
         seenIds.add(normalized.id);
         selectedBills.push(normalized);
-        if (bill.id !== normalized.id || bill.name !== normalized.name || bill.amount !== normalized.amount) migrated = true;
+        if (bill.id !== normalized.id || bill.name !== normalized.name || bill.amount !== normalized.amount || bill.paid !== normalized.paid) migrated = true;
       });
       const otherBills = roundMoney(Number(plan.otherBills));
       if (plan.otherBills !== otherBills || selectedBills.length !== plan.selectedBills.length) migrated = true;

@@ -269,6 +269,55 @@
     renderBudgetGoalAllocation();
     renderRecurringBills(configured && Array.isArray(savedBudget?.selectedBills) ? savedBudget.selectedBills : []);
     updateBudgetBillSummary();
+    renderBillPayments(savedBudget, configured);
+  }
+
+  function renderBillPayments(savedBudget, configured) {
+    const empty = $('#bill-payments-empty');
+    const content = $('#bill-payments-content');
+    const bills = configured && Array.isArray(savedBudget?.selectedBills)
+      ? savedBudget.selectedBills.filter(bill => bill && typeof bill.id === 'string')
+      : [];
+    const uniqueBills = [...new Map(bills.map(bill => [bill.id, bill])).values()];
+
+    content.classList.toggle('hidden', uniqueBills.length === 0);
+    empty.classList.toggle('hidden', uniqueBills.length > 0);
+    if (uniqueBills.length === 0) {
+      empty.textContent = configured
+        ? 'W tym okresie nie wybrano rachunków z biblioteki. Inne rachunki nie mają osobnych statusów płatności.'
+        : 'Zapisz plan z wybranymi rachunkami, aby śledzić ich status płatności.';
+      $('#bill-payments-list').innerHTML = '';
+      return;
+    }
+
+    const paidCount = uniqueBills.filter(bill => bill.paid === true).length;
+    const paidTotal = Core.roundMoney(uniqueBills.reduce((sum, bill) => sum + (bill.paid === true ? Number(bill.amount) : 0), 0));
+    const unpaidTotal = Core.roundMoney(uniqueBills.reduce((sum, bill) => sum + (bill.paid === true ? 0 : Number(bill.amount)), 0));
+    const progress = uniqueBills.length ? Math.round(paidCount / uniqueBills.length * 100) : 0;
+    $('#bill-payments-paid-total').textContent = `${money(paidTotal)} zł`;
+    $('#bill-payments-unpaid-total').textContent = `${money(unpaidTotal)} zł`;
+    $('#bill-payments-count').textContent = `${paidCount} z ${uniqueBills.length}`;
+    const progressBar = $('#bill-payments-progress');
+    progressBar.setAttribute('aria-valuenow', String(progress));
+    progressBar.setAttribute('aria-valuetext', `${paidCount} z ${uniqueBills.length} opłaconych rachunków`);
+    progressBar.querySelector('span').style.width = `${progress}%`;
+    $('#bill-payments-list').innerHTML = uniqueBills.map(bill => {
+      const paid = bill.paid === true;
+      const name = esc(bill.name);
+      return `<div class="bill-payment-row"><div class="bill-payment-copy"><strong>${name}</strong><small>${money(Number(bill.amount))} zł · <span class="${paid ? 'is-paid' : ''}">${paid ? 'Opłacony' : 'Do zapłaty'}</span></small></div><button type="button" class="bill-payment-toggle${paid ? ' is-paid' : ''}" data-bill-payment-toggle="${esc(bill.id)}" aria-pressed="${paid}" aria-label="${paid ? 'Cofnij oznaczenie opłacenia rachunku' : 'Oznacz rachunek jako opłacony'}">${paid ? 'Cofnij' : 'Oznacz jako opłacony'}</button></div>`;
+    }).join('');
+  }
+
+  function toggleBillPayment(id) {
+    const savedBudget = state.budgets[selectedPeriod.planMonth];
+    if (!hasBudget() || !Array.isArray(savedBudget?.selectedBills)) return;
+    const bill = savedBudget.selectedBills.find(item => item.id === id);
+    if (!bill) return;
+    bill.paid = bill.paid !== true;
+    save();
+    renderBillPayments(savedBudget, true);
+    [...$('#bill-payments-list').querySelectorAll('[data-bill-payment-toggle]')]
+      .find(button => button.dataset.billPaymentToggle === id)?.focus();
   }
 
   function renderRecurringBills(savedBills = []) {
@@ -771,6 +820,10 @@
     if (!event.target.checked) showCurrentBillTemplate(event.target);
     updateBudgetBillSummary();
   });
+  $('#bill-payments-list').addEventListener('click', event => {
+    const button = event.target.closest('[data-bill-payment-toggle]');
+    if (button) toggleBillPayment(button.dataset.billPaymentToggle);
+  });
   $$('[data-action=cancel-bill-delete]').forEach(button => button.addEventListener('click', closeRecurringBillDelete));
   $('#recurring-bill-delete-modal').addEventListener('click', event => { if (event.target.id === 'recurring-bill-delete-modal') closeRecurringBillDelete(); });
   $('#recurring-bill-delete-modal [data-action=confirm-bill-delete]').addEventListener('click', confirmRecurringBillDelete);
@@ -899,16 +952,37 @@
       return;
     }
 
+    const planKey = selectedPeriod.planMonth;
+    const previousPlan = state.budgets[planKey] || {};
+    const previousBills = Array.isArray(previousPlan.selectedBills) ? previousPlan.selectedBills : [];
+    const proposedBillById = new Map(selectedBillPlan.bills.map(bill => [bill.id, bill]));
+    const changedPaidBills = previousBills.filter(previous => {
+      if (previous.paid !== true) return false;
+      const next = proposedBillById.get(previous.id);
+      return !next || next.name !== previous.name || Core.roundMoney(Number(next.amount)) !== Core.roundMoney(Number(previous.amount));
+    });
+    if (changedPaidBills.length) {
+      const details = changedPaidBills.map(bill => `• ${bill.name} — ${money(Number(bill.amount))} zł`).join('\n');
+      const confirmed = window.confirm(`Te rachunki są oznaczone jako opłacone:\n${details}\n\nZmiana planu usunie lub zastąpi ich zapisany status w tym okresie. Czy chcesz kontynuować?`);
+      if (!confirmed) return;
+    }
+    const selectedBills = selectedBillPlan.bills.map(bill => {
+      const previous = previousBills.find(item => item.id === bill.id
+        && item.name === bill.name
+        && Core.roundMoney(Number(item.amount)) === Core.roundMoney(Number(bill.amount)));
+      return { ...bill, paid: previous?.paid === true };
+    });
+
     if (allocationEnabled) {
       allocatableGoals().forEach(goal => {
         if (proposedContributions.has(goal.id)) goal.contributionPerPeriod = Core.roundGoalMoney(proposedContributions.get(goal.id));
       });
     }
-    state.budgets[selectedPeriod.planMonth] = {
-      ...(state.budgets[selectedPeriod.planMonth] || {}),
+    state.budgets[planKey] = {
+      ...previousPlan,
       ...amounts,
       otherBills: remainingBills,
-      selectedBills: selectedBillPlan.bills
+      selectedBills
     };
     $('#budget-form-error').classList.add('hidden');
     $('#budget-goal-error').classList.add('hidden');
