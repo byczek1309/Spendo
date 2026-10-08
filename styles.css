@@ -577,12 +577,18 @@ body[data-theme='dark'] .brand-mark { background: #a6c0b1; color: #172019; }
 .goal-progress { height: 7px; min-width: 0; flex: 1; overflow: hidden; border-radius: 9px; background: var(--surface-soft); }
 .goal-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .goal-progress-line > strong { flex: 0 0 auto; font: 700 13px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
-.goal-amounts { display: flex; align-items: baseline; gap: 5px; margin-top: 13px; font-variant-numeric: tabular-nums; }
-.goal-amounts strong { font: 700 18px 'Manrope', sans-serif; }
-.goal-amounts span { color: var(--muted); font-size: 12px; }
+.goal-balance-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 13px; }
+.goal-balance-values > div { display: grid; gap: 4px; }
+.goal-balance-values span, .goal-unconfirmed-balance > span { color: var(--muted); font-size: 11px; }
+.goal-balance-values strong, .goal-unconfirmed-balance > strong { font: 700 18px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
+.goal-unconfirmed-balance { display: grid; gap: 8px; margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface-soft); }
+.goal-unconfirmed-balance p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.goal-unconfirmed-balance .secondary-button { width: 100%; }
 .goal-remaining { margin: 4px 0 12px; color: var(--muted); font-size: 12px; }
 .goal-card-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; padding-top: 11px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 .goal-period-estimate { color: var(--ink); font-weight: 600; }
+.goal-forecast-note { flex-basis: 100%; color: var(--muted); font-size: 10px; }
+.goal-deposit-button { width: 100%; margin-top: 11px; }
 .goal-date-plan { display: grid; gap: 5px; margin-top: 11px; font-size: 11px; line-height: 1.45; }
 .goal-on-time { color: var(--accent-strong); }
 .goal-late { color: #aa7257; }
@@ -598,6 +604,8 @@ body[data-theme='dark'] .brand-mark { background: #a6c0b1; color: #172019; }
 .budget-goals-total { display: block; margin-top: 8px; font: 600 11px 'Manrope', sans-serif; }
 .budget-goals-summary .goal-warning { margin-top: 10px; font-size: 11px; }
 .goal-sheet { gap: 13px; }
+.goal-deposit-sheet { gap: 13px; }
+.goal-deposit-sheet > p { margin: 0; }
 .goal-form-message { margin: -4px 0 0; padding: 11px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); font-size: 12px; line-height: 1.5; }
 .goal-delete-sheet p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .goal-delete-sheet p strong { color: var(--ink); }

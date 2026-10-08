@@ -2,6 +2,7 @@
   'use strict';
 
   const DAY_MS = 24 * 60 * 60 * 1000;
+  const STATE_SCHEMA_VERSION = 3;
   const pools = [
     { id: 'bills', icon: '🧾', name: 'Rachunki', field: 'bills' },
     { id: 'fuel', icon: '⛽', name: 'Paliwo', field: 'fuel' },
@@ -119,7 +120,7 @@
   }
 
   function blankState() {
-    return { schemaVersion: 2, payday: 1, budgets: {}, expenses: [], savingsGoals: [], theme: 'system' };
+    return { schemaVersion: STATE_SCHEMA_VERSION, payday: 1, budgets: {}, expenses: [], savingsGoals: [], theme: 'system' };
   }
 
   function normalizeSavingsGoal(goal, index) {
@@ -136,6 +137,7 @@
       contributionPerPeriod: amount(source.contributionPerPeriod),
       targetDate,
       active: source.active !== false,
+      savedAmountConfirmed: source.savedAmountConfirmed === true,
       createdAt: typeof source.createdAt === 'string' ? source.createdAt : '',
       lastAccruedPeriod: typeof source.lastAccruedPeriod === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.lastAccruedPeriod)
         && dateKey(parseDateKey(source.lastAccruedPeriod)) === source.lastAccruedPeriod ? source.lastAccruedPeriod : ''
@@ -164,21 +166,11 @@
     return Number.isFinite(periods) ? Math.ceil(periods) : 0;
   }
 
-  function accrueGoal(goal, periods) {
-    const target = Number(goal?.targetAmount);
-    const saved = Number(goal?.savedAmount);
-    const contribution = Number(goal?.contributionPerPeriod);
-    const count = Number(periods);
-    if (![target, saved, contribution, count].every(Number.isFinite) || target <= 0 || contribution <= 0 || count <= 0) {
-      return Number.isFinite(saved) && saved >= 0 ? roundGoalMoney(saved) : 0;
-    }
-    return roundGoalMoney(Math.min(target, saved + contribution * Math.floor(count)));
-  }
-
   function activeGoalContributions(goals) {
     const total = (Array.isArray(goals) ? goals : []).reduce((sum, goal) => {
       const contribution = Number(goal?.contributionPerPeriod);
-      if (goal?.active === false || goalRemaining(goal) <= 0 || !Number.isFinite(contribution) || contribution <= 0) return sum;
+      const completed = goal?.savedAmountConfirmed === true && goalRemaining(goal) <= 0;
+      if (goal?.active === false || completed || !Number.isFinite(contribution) || contribution <= 0) return sum;
       const next = sum + contribution;
       return Number.isFinite(next) ? next : Number.MAX_VALUE;
     }, 0);
@@ -206,7 +198,11 @@
         : [],
       payday: normalizedPayday(source.payday)
     };
-    let migrated = source.schemaVersion !== 2 || source.payday !== state.payday || !Array.isArray(source.savingsGoals);
+    let migrated = source.schemaVersion !== STATE_SCHEMA_VERSION
+      || source.payday !== state.payday
+      || !Array.isArray(source.savingsGoals)
+      || (Array.isArray(source.savingsGoals) && source.savingsGoals.some(goal =>
+        goal && typeof goal === 'object' && !Array.isArray(goal) && typeof goal.savedAmountConfirmed !== 'boolean'));
 
     state.expenses = state.expenses.map((expense, index) => {
       if (!expense || typeof expense !== 'object' || Array.isArray(expense)) {
@@ -241,7 +237,7 @@
       return normalized;
     });
 
-    state.schemaVersion = 2;
+    state.schemaVersion = STATE_SCHEMA_VERSION;
     return { state, migrated };
   }
 
@@ -327,7 +323,6 @@
     goalRemaining,
     goalProgress,
     goalPeriodsRemaining,
-    accrueGoal,
     activeGoalContributions,
     requiredGoalContribution,
     roundGoalMoney,
