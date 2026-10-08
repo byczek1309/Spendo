@@ -679,3 +679,9 @@ body[data-theme='dark'] .danger-button { border-color: #49392e; background: #302
   .recurring-bill-row { gap: 7px; }
   .recurring-bill-actions { gap: 0; }
 }
+
+@media (max-width: 759px), (pointer: coarse) {
+  input, select, textarea { font-size: 16px; }
+  .setting-row select { max-width: min(150px, 42vw); font-size: 16px; }
+  .budget-goal-row .input-wrap input { font-size: 16px; }
+}

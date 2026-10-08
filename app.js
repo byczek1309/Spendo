@@ -297,7 +297,7 @@
     const name = esc(bill.name);
     const amount = Number(bill.amount);
     const amountLabel = money(amount);
-    const detail = snapshot ? 'Kwota i nazwa zapisane w tym planie' : 'Uwzględnij w bieżącym planie';
+    const detail = snapshot ? 'Migawka z planu · odznacz, aby użyć aktualnej kwoty' : 'Aktualna kwota z biblioteki';
     const actions = hasTemplate
       ? `<div class="recurring-bill-actions"><button class="goal-icon-button" type="button" data-bill-action="edit" data-bill-id="${id}" aria-label="Edytuj rachunek ${name}">✎</button><button class="goal-icon-button danger-icon" type="button" data-bill-action="delete" data-bill-id="${id}" aria-label="Usuń rachunek ${name}">×</button></div>`
       : '<div class="recurring-bill-actions recurring-bill-archived">Szablon usunięty</div>';
@@ -324,6 +324,19 @@
     return { bills, total, error: !Number.isFinite(total) };
   }
 
+  function showCurrentBillTemplate(input) {
+    const template = state.recurringBills.find(bill => bill.id === input.dataset.planBillId);
+    if (!template) return;
+    input.dataset.planBillName = template.name;
+    input.dataset.planBillAmount = String(template.amount);
+    input.setAttribute('aria-label', `Uwzględnij rachunek ${template.name}`);
+    const row = input.closest('.recurring-bill-row');
+    if (!row) return;
+    row.querySelector('.recurring-bill-copy strong').textContent = template.name;
+    row.querySelector('.recurring-bill-copy small').textContent = 'Aktualna kwota z biblioteki';
+    row.querySelector('.recurring-bill-amount').textContent = `${money(template.amount)} zł`;
+  }
+
   function updateBudgetBillSummary() {
     const manualValue = parseOptionalDecimalAmount($('#budget-form').elements.bills.value);
     const manual = Core.roundMoney(manualValue);
@@ -335,12 +348,24 @@
     $('#bill-plan-other-total').textContent = validManual ? `${money(manual)} zł` : '—';
     $('#bill-plan-total').textContent = valid ? `${money(total)} zł` : '—';
     const error = !validManual
-      ? 'Wpisz poprawną, nieujemną kwotę pozostałych rachunków.'
-      : selected.error || !Number.isFinite(total)
+      ? 'Wpisz poprawną, nieujemną kwotę innych rachunków.'
+      : selected.error
+        ? 'Nie można odczytać kwoty zaznaczonego rachunku. Sprawdź pozycje z biblioteki.'
+        : !Number.isFinite(total)
         ? 'Suma rachunków jest za duża do obliczenia.'
         : '';
     $('#bill-plan-error').textContent = error;
     $('#bill-plan-error').classList.toggle('hidden', !error);
+  }
+
+  function refreshRecurringBillLibraryPreservingDraft() {
+    const selected = selectedBillPlanFromForm();
+    const savedBudget = state.budgets[selectedPeriod.planMonth];
+    const selectedBills = selected.error
+      ? (Array.isArray(savedBudget?.selectedBills) ? savedBudget.selectedBills : [])
+      : selected.bills;
+    renderRecurringBills(selectedBills);
+    updateBudgetBillSummary();
   }
 
   function renderBudgetGoalAllocation() {
@@ -586,7 +611,7 @@
     else state.recurringBills.push(bill);
     save();
     closeRecurringBillForm();
-    update();
+    refreshRecurringBillLibraryPreservingDraft();
     showToast(existing ? 'Rachunek zaktualizowany' : 'Rachunek dodany');
   }
 
@@ -608,7 +633,7 @@
     state.recurringBills = state.recurringBills.filter(bill => bill.id !== billToDelete);
     save();
     closeRecurringBillDelete();
-    update();
+    refreshRecurringBillLibraryPreservingDraft();
     showToast('Rachunek usunięty');
   }
 
@@ -742,7 +767,9 @@
     else if (button.dataset.billAction === 'delete') beginRecurringBillDelete(button.dataset.billId);
   });
   $('#recurring-bills-list').addEventListener('change', event => {
-    if (event.target.matches('[data-plan-bill-id]')) updateBudgetBillSummary();
+    if (!event.target.matches('[data-plan-bill-id]')) return;
+    if (!event.target.checked) showCurrentBillTemplate(event.target);
+    updateBudgetBillSummary();
   });
   $$('[data-action=cancel-bill-delete]').forEach(button => button.addEventListener('click', closeRecurringBillDelete));
   $('#recurring-bill-delete-modal').addEventListener('click', event => { if (event.target.id === 'recurring-bill-delete-modal') closeRecurringBillDelete(); });
@@ -822,7 +849,7 @@
     for (const name of ['income', 'bills', 'fuel', 'savings']) {
       const value = parseOptionalDecimalAmount(form.elements[name].value);
       if (!Number.isFinite(value) || value < 0) {
-        $('#budget-form-error').textContent = `Wpisz poprawną, nieujemną kwotę w polu „${({ income: 'Dochód na okres', bills: 'Pozostałe rachunki', fuel: 'Limit paliwa', savings: 'Planowane oszczędności' })[name]}”.`;
+        $('#budget-form-error').textContent = `Wpisz poprawną, nieujemną kwotę w polu „${({ income: 'Dochód na okres', bills: 'Inne rachunki (poza wybranymi)', fuel: 'Limit paliwa', savings: 'Planowane oszczędności' })[name]}”.`;
         $('#budget-form-error').classList.remove('hidden');
         return;
       }
