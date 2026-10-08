@@ -24,6 +24,7 @@
   let toastTimer;
   let goalToDelete = '';
   let depositGoalId = '';
+  let budgetGoalsSectionEnabled = null;
   let state;
   try {
     const normalized = Core.normalizeState(JSON.parse(localStorage.getItem(KEY) || '{}'));
@@ -69,6 +70,11 @@
 
   function activeGoalAmount() {
     return Core.activeGoalContributions(state.savingsGoals);
+  }
+
+  function allocatableGoals() {
+    return state.savingsGoals.filter(goal => goal.active !== false
+      && !(goal.savedAmountConfirmed === true && Core.goalRemaining(goal) <= 0));
   }
 
   function periodCountToTarget(targetDate) {
@@ -258,6 +264,50 @@
     $('#budget-form').elements.bills.value = configured ? budget.bills : '';
     $('#budget-form').elements.fuel.value = configured ? budget.fuel : '';
     $('#budget-form').elements.savings.value = configured ? budget.savings : '';
+    renderBudgetGoalAllocation();
+  }
+
+  function renderBudgetGoalAllocation() {
+    const goals = allocatableGoals();
+    if (budgetGoalsSectionEnabled === null) budgetGoalsSectionEnabled = activeGoalAmount() > 0;
+    $('#budget-goals-toggle').checked = budgetGoalsSectionEnabled;
+    $('#budget-goal-allocation').classList.toggle('hidden', !budgetGoalsSectionEnabled);
+    $('#budget-goals-preserved-note').classList.toggle('hidden', budgetGoalsSectionEnabled
+      || !state.savingsGoals.some(goal => Number(goal.contributionPerPeriod) > 0));
+    $('#budget-no-active-goals').classList.toggle('hidden', goals.length > 0);
+    $('#budget-goal-fields').innerHTML = goals.map(goal => `<label class="budget-goal-row"><span>${esc(goal.name || 'Cel oszczędnościowy')}<small>Planowana składka / okres</small></span><span class="input-wrap"><input type="text" inputmode="decimal" autocomplete="off" data-goal-contribution="${esc(goal.id)}" aria-label="Planowana składka na cel ${esc(goal.name)}" value="${money(goal.contributionPerPeriod)}"><span>zł</span></span></label>`).join('');
+    updateBudgetGoalAllocationSummary();
+  }
+
+  function parseDecimalAmount(value) {
+    const normalized = String(value).trim().replace(/\s/g, '').replace(',', '.');
+    if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(normalized)) return NaN;
+    return Number(normalized);
+  }
+
+  function parseOptionalDecimalAmount(value) {
+    return String(value).trim() === '' ? 0 : parseDecimalAmount(value);
+  }
+
+  function updateBudgetGoalAllocationSummary() {
+    const form = $('#budget-form');
+    const pool = parseOptionalDecimalAmount(form.elements.savings.value);
+    const inputs = $$('[data-goal-contribution]');
+    const values = inputs.map(input => parseOptionalDecimalAmount(input.value));
+    const valid = Number.isFinite(pool) && pool >= 0 && values.every(value => Number.isFinite(value) && value >= 0);
+    const assigned = valid ? Core.roundMoney(values.reduce((sum, value) => sum + value, 0)) : NaN;
+    const available = valid && Number.isFinite(assigned) ? Core.roundMoney(pool - assigned) : NaN;
+    $('#budget-goal-assigned').textContent = valid && Number.isFinite(assigned) ? `${money(assigned)} / ${money(pool)} zł` : '—';
+    $('#budget-goal-unassigned').textContent = Number.isFinite(available) && available >= 0 ? `${money(available)} zł` : '—';
+    const error = !valid
+      ? 'Wpisz poprawne kwoty nieujemne, z maksymalnie dwoma miejscami po przecinku.'
+      : !Number.isFinite(assigned)
+        ? 'Suma składek jest za duża do obliczenia.'
+        : assigned > pool
+          ? `Przypisano ${money(assigned)} zł, czyli o ${money(assigned - pool)} zł więcej niż pula Oszczędności (${money(pool)} zł). Zmniejsz składki lub zwiększ pulę.`
+          : '';
+    $('#budget-goal-error').textContent = error;
+    $('#budget-goal-error').classList.toggle('hidden', !error);
   }
 
   function renderStats(expenses, amounts) {
@@ -411,16 +461,10 @@
     $('#goal-deposit-error').classList.add('hidden');
   }
 
-  function parseDepositAmount(value) {
-    const normalized = String(value).trim().replace(/\s/g, '').replace(',', '.');
-    if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(normalized)) return NaN;
-    return Number(normalized);
-  }
-
   function saveGoalDeposit(event) {
     event.preventDefault();
     const goal = state.savingsGoals.find(item => item.id === depositGoalId);
-    const amount = parseDepositAmount(event.currentTarget.elements.amount.value);
+    const amount = parseDecimalAmount(event.currentTarget.elements.amount.value);
     let error = '';
     if (!goal || goal.savedAmountConfirmed !== true) error = 'Najpierw potwierdź saldo celu.';
     else if (!Number.isFinite(amount) || amount <= 0) error = 'Wpisz poprawną kwotę większą od 0 zł (do dwóch miejsc po przecinku).';
@@ -460,7 +504,7 @@
     else if (!Number.isFinite(targetAmount) || targetAmount <= 0) error = 'Kwota docelowa musi być większa od 0 zł.';
     else if (!Number.isFinite(savedAmount) || savedAmount < 0) error = 'Kwota już odłożona nie może być ujemna.';
     else if (savedAmount > targetAmount) error = 'Kwota już odłożona nie może przekraczać celu.';
-    else if (!Number.isFinite(contributionPerPeriod) || contributionPerPeriod <= 0) error = 'Kwota odkładana w każdym okresie musi być większa od 0 zł.';
+    else if (!Number.isFinite(contributionPerPeriod) || contributionPerPeriod < 0) error = 'Planowana składka nie może być ujemna.';
     else if (targetDate && (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate) || Core.dateKey(Core.parseDateKey(targetDate)) !== targetDate)) error = 'Wybierz poprawny termin celu.';
     if (error) {
       $('#goal-form-error').textContent = error;
@@ -510,7 +554,13 @@
   $('#category-select').innerHTML = Core.categories.map(item => `<option value="${item.name}">${item.icon} ${item.name}</option>`).join('');
   $('#payday-select').innerHTML = Array.from({ length: 31 }, (_, index) => `<option value="${index + 1}">${index + 1}</option>`).join('');
   $('#category-select').addEventListener('change', updateCategoryPoolHint);
-  $$('[data-screen]').forEach(button => button.addEventListener('click', () => showScreen(button.dataset.screen)));
+  $$('[data-screen]').forEach(button => button.addEventListener('click', () => {
+    if (button.dataset.screen === 'budget') {
+      budgetGoalsSectionEnabled = null;
+      update();
+    }
+    showScreen(button.dataset.screen);
+  }));
   $$('[data-action=add]').forEach(button => button.addEventListener('click', openModal));
   $$('[data-action=close]').forEach(button => button.addEventListener('click', closeModal));
   $('#expense-modal').addEventListener('click', event => { if (event.target.id === 'expense-modal') closeModal(); });
@@ -598,11 +648,71 @@
   $('#budget-form').addEventListener('submit', event => {
     event.preventDefault();
     const form = event.currentTarget;
-    state.budgets[selectedPeriod.planMonth] = Object.fromEntries(['income', 'bills', 'fuel', 'savings'].map(name => [name, Math.max(0, Number(form.elements[name].value) || 0)]));
+    const amounts = {};
+    for (const name of ['income', 'bills', 'fuel', 'savings']) {
+      const value = parseOptionalDecimalAmount(form.elements[name].value);
+      if (!Number.isFinite(value) || value < 0) {
+        $('#budget-form-error').textContent = `Wpisz poprawną, nieujemną kwotę w polu „${({ income: 'Dochód na okres', bills: 'Rachunki', fuel: 'Limit paliwa', savings: 'Planowane oszczędności' })[name]}”.`;
+        $('#budget-form-error').classList.remove('hidden');
+        return;
+      }
+      amounts[name] = Core.roundMoney(value);
+    }
+
+    const allocationEnabled = $('#budget-goals-toggle').checked;
+    const proposedContributions = new Map();
+    let assigned = Core.activeGoalContributions(state.savingsGoals);
+    if (allocationEnabled) {
+      const inputs = $$('[data-goal-contribution]');
+      const parsed = inputs.map(input => ({ id: input.dataset.goalContribution, value: parseOptionalDecimalAmount(input.value) }));
+      if (parsed.some(item => !Number.isFinite(item.value) || item.value < 0)) {
+        $('#budget-goal-error').textContent = 'Wpisz poprawne kwoty nieujemne, z maksymalnie dwoma miejscami po przecinku.';
+        $('#budget-goal-error').classList.remove('hidden');
+        return;
+      }
+      parsed.forEach(item => proposedContributions.set(item.id, item.value));
+      assigned = Core.roundMoney(parsed.reduce((sum, item) => sum + item.value, 0));
+      if (!Number.isFinite(assigned)) {
+        $('#budget-goal-error').textContent = 'Suma składek jest za duża do obliczenia.';
+        $('#budget-goal-error').classList.remove('hidden');
+        return;
+      }
+    }
+    if (assigned > amounts.savings) {
+      $('#budget-form-error').textContent = `Aktywne składki celów wynoszą ${money(assigned)} zł, a pula Oszczędności ${money(amounts.savings)} zł. Zwiększ pulę albo zaznacz przypisywanie do celów i zmniejsz składki.`;
+      $('#budget-form-error').classList.remove('hidden');
+      if (allocationEnabled) {
+        $('#budget-goal-error').textContent = `Przypisano ${money(assigned)} zł, czyli o ${money(assigned - amounts.savings)} zł więcej niż pula Oszczędności (${money(amounts.savings)} zł). Zmniejsz składki lub zwiększ pulę.`;
+        $('#budget-goal-error').classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (allocationEnabled) {
+      allocatableGoals().forEach(goal => {
+        if (proposedContributions.has(goal.id)) goal.contributionPerPeriod = Core.roundGoalMoney(proposedContributions.get(goal.id));
+      });
+    }
+    state.budgets[selectedPeriod.planMonth] = amounts;
+    $('#budget-form-error').classList.add('hidden');
+    $('#budget-goal-error').classList.add('hidden');
     save();
     update();
     showToast('Plan zapisany');
   });
+
+  $('#budget-goals-toggle').addEventListener('change', event => {
+    budgetGoalsSectionEnabled = event.currentTarget.checked;
+    $('#budget-goal-allocation').classList.toggle('hidden', !budgetGoalsSectionEnabled);
+    $('#budget-goals-preserved-note').classList.toggle('hidden', budgetGoalsSectionEnabled
+      || !state.savingsGoals.some(goal => Number(goal.contributionPerPeriod) > 0));
+    updateBudgetGoalAllocationSummary();
+  });
+  $('#budget-form').addEventListener('input', () => {
+    $('#budget-form-error').classList.add('hidden');
+    updateBudgetGoalAllocationSummary();
+  });
+  $('#budget-go-to-goals').addEventListener('click', () => showScreen('goals'));
 
   $('#prev-month').addEventListener('click', () => shiftMonth(-1));
   $('#next-month').addEventListener('click', () => shiftMonth(1));

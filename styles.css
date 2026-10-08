@@ -606,6 +606,28 @@ body[data-theme='dark'] .brand-mark { background: #a6c0b1; color: #172019; }
 .goal-sheet { gap: 13px; }
 .goal-deposit-sheet { gap: 13px; }
 .goal-deposit-sheet > p { margin: 0; }
+.form-panel label.budget-goals-toggle { display: flex; align-items: flex-start; gap: 11px; padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); cursor: pointer; }
+.budget-goals-toggle > input { width: 22px; height: 22px; flex: 0 0 22px; margin: 1px 0 0; accent-color: var(--accent-strong); }
+.budget-goals-toggle > span { display: grid; gap: 4px; }
+.budget-goals-toggle strong { font-size: 12px; }
+.budget-goals-toggle small, .budget-goal-allocation > p { color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.45; }
+.budget-goal-allocation { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.budget-goal-allocation h4 { margin: 0; font: 700 14px 'Manrope', sans-serif; }
+.budget-goal-allocation > p { margin: -5px 0 0; }
+.budget-goal-fields { display: grid; gap: 10px; }
+.form-panel label.budget-goal-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.budget-goal-row > span:first-child { min-width: 0; font-size: 12px; font-weight: 600; }
+.budget-goal-row > span:first-child small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; font-weight: 400; }
+.budget-goal-row .input-wrap { width: min(145px, 48%); height: 44px; padding: 0 10px; }
+.budget-goal-row .input-wrap input { min-width: 0; font-size: 13px; text-align: right; }
+.budget-goal-row .input-wrap > span { margin-left: 7px; font-size: 11px; }
+.budget-goal-assignment-summary { display: grid; gap: 8px; padding-top: 11px; border-top: 1px solid var(--line); }
+.budget-goal-assignment-summary > div { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; }
+.budget-goal-assignment-summary strong { color: var(--ink); font: 600 12px 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
+.budget-no-active-goals { display: grid; gap: 3px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.budget-no-active-goals .text-button { justify-self: start; min-height: 44px; padding: 0; }
+.budget-goal-allocation .goal-form-message { margin: 0; }
+.budget-goals-preserved-note { margin: -6px 2px 0; line-height: 1.45; }
 .goal-form-message { margin: -4px 0 0; padding: 11px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); font-size: 12px; line-height: 1.5; }
 .goal-delete-sheet p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .goal-delete-sheet p strong { color: var(--ink); }
