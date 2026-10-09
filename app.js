@@ -197,12 +197,12 @@
     renderGoals(amounts);
   }
 
-  function expenseRow(expense) {
+  function expenseRow(expense, editable = false) {
     const itemCategory = category(expense.category);
     const when = expense.date === todayKey && expense.created
       ? new Intl.DateTimeFormat('pl-PL', { hour: '2-digit', minute: '2-digit' }).format(new Date(expense.created))
       : new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'short' }).format(Core.parseDateKey(expense.date));
-    return `<div class="expense-row"><span class="expense-icon">${itemCategory.icon}</span><div class="expense-info"><strong>${esc(expense.category)}</strong><small>${expense.note ? `${esc(expense.note)} · ` : ''}${when}</small></div><strong class="expense-price">−${money(expense.amount)} zł</strong><button class="delete-button" data-delete="${esc(expense.id)}" aria-label="Usuń wydatek">×</button></div>`;
+    return `<div class="expense-row"><span class="expense-icon">${itemCategory.icon}</span><div class="expense-info"><strong>${esc(expense.category)}</strong><small>${expense.note ? `${esc(expense.note)} · ` : ''}${when}</small></div><strong class="expense-price">−${money(expense.amount)} zł</strong>${editable ? `<button type="button" class="expense-edit" data-edit-expense="${esc(expense.id)}">Edytuj</button>` : ''}<button type="button" class="delete-button" data-delete="${esc(expense.id)}" aria-label="Usuń wydatek">×</button></div>`;
   }
 
   function renderCalendar() {
@@ -241,7 +241,7 @@
         last = expense.date;
         heading = `<div class="history-day">${new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(Core.parseDateKey(expense.date))}</div>`;
       }
-      return heading + expenseRow(expense);
+      return heading + expenseRow(expense, true);
     }).join('') : `<div class="empty-state"><span>🌿</span><p>${selectedDay ? 'Brak wydatków tego dnia.' : 'Historia zaczyna się od małych kroków.'}</p></div>`;
   }
 
@@ -548,18 +548,149 @@
     toastTimer = setTimeout(() => element.classList.remove('visible'), 2200);
   }
 
-  function openModal() {
+  let expenseDraft = null;
+  let expenseDeleteDraft = null;
+  let expenseBusy = false;
+  let expenseReturnFocus = null;
+
+  function expenseError(message) {
+    $('#expense-form-error').textContent = message;
+    $('#expense-form-error').classList.remove('hidden');
+  }
+
+  function readExpenseStorage() {
+    let stored;
+    try { stored = localStorage.getItem(KEY); }
+    catch { throw new Error('Nie można odczytać danych urządzenia. Spróbuj ponownie.'); }
+    if (stored !== null) {
+      let saved;
+      try { saved = JSON.parse(stored); }
+      catch { throw new Error('Zapisane dane są nieczytelne. Zachowaj kopię przed dalszymi zmianami.'); }
+      if (JSON.stringify(saved) !== JSON.stringify(state)) throw new Error('Dane na urządzeniu zmieniły się. Odśwież aplikację przed edycją.');
+    }
+    return stored;
+  }
+
+  function expenseSnapshot(id) {
+    const matches = state.expenses.filter(expense => expense.id === id);
+    if (matches.length !== 1) throw new Error('Nie można jednoznacznie znaleźć wydatku. Otwórz Historię ponownie.');
+    return { expense: { ...matches[0] }, stored: readExpenseStorage(), original: JSON.stringify(matches[0]) };
+  }
+
+  function openModal(expenseId = '') {
+    // Add buttons pass their click event; only string IDs select an edit.
+    if (typeof expenseId !== 'string') expenseId = '';
     const form = $('#expense-form');
+    try {
+      expenseDraft = expenseId ? expenseSnapshot(expenseId) : { stored: readExpenseStorage() };
+    } catch (error) { showToast(error.message || 'Nie można odczytać danych.'); return; }
+    expenseReturnFocus = document.activeElement;
     form.reset();
-    form.elements.date.value = todayKey;
-    form.elements.category.value = 'Jedzenie';
+    const expense = expenseDraft.expense;
+    form.elements.amount.value = expense ? String(expense.amount).replace('.', ',') : '';
+    form.elements.date.value = expense?.date || todayKey;
+    form.elements.category.value = expense?.category || 'Jedzenie';
+    form.elements.note.value = expense?.note || '';
+    form.querySelector('[type=submit]').disabled = false;
+    form.querySelector('[type=submit]').textContent = expense ? 'Zapisz zmiany' : 'Zapisz wydatek';
+    $('#modal-title').textContent = expense ? 'Edytuj wydatek' : 'Dodaj wydatek';
+    $('#expense-form-error').classList.add('hidden');
     updateCategoryPoolHint();
     $('#expense-modal').classList.remove('hidden');
-    setTimeout(() => form.elements.amount.focus(), 100);
+    setTimeout(() => { if (expenseDraft) form.elements.amount.focus(); }, 100);
   }
 
   function closeModal() {
     $('#expense-modal').classList.add('hidden');
+    expenseDraft = null;
+    expenseReturnFocus?.focus();
+    expenseReturnFocus = null;
+  }
+
+  function persistExpenses(expenses, draft) {
+    if (readExpenseStorage() !== draft.stored) throw new Error('Dane zmieniły się od otwarcia formularza. Odśwież aplikację i otwórz wydatek ponownie.');
+    const next = { ...state, expenses };
+    try { localStorage.setItem(KEY, JSON.stringify(next)); }
+    catch { throw new Error('Nie udało się zapisać danych na urządzeniu (np. brak miejsca). Dane nie zostały zmienione.'); }
+    state = next;
+  }
+
+  function saveExpense(event) {
+    event.preventDefault();
+    if (expenseBusy || !expenseDraft) return;
+    const form = event.currentTarget;
+    expenseBusy = true;
+    form.querySelector('[type=submit]').disabled = true;
+    try {
+      const amount = parseDecimalAmount(form.elements.amount.value);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 1e12 || Core.roundMoney(amount) <= 0) throw new Error('Wpisz dodatnią kwotę, maksymalnie 1 000 000 000 000 zł, z najwyżej dwoma miejscami po przecinku.');
+      const date = form.elements.date.value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < '0100-01-01' || Core.dateKey(Core.parseDateKey(date)) !== date) throw new Error('Wybierz poprawną datę wydatku.');
+      const category = Core.categories.find(item => item.name === form.elements.category.value);
+      if (!category) throw new Error('Wybierz kategorię z listy.');
+      const note = form.elements.note.value.trim();
+      if (note.length > 80) throw new Error('Notatka może mieć najwyżej 80 znaków.');
+      const original = expenseDraft.expense;
+      if (original) {
+        const current = expenseSnapshot(original.id);
+        if (current.original !== expenseDraft.original) throw new Error('Wydatek został zmieniony. Otwórz go ponownie.');
+        const from = Core.periodForDate(original.date, state.payday);
+        const to = Core.periodForDate(date, state.payday);
+        if (from.start !== to.start && !window.confirm(`Zmiana daty przeniesie wydatek z okresu ${periodLabel(from)} do ${periodLabel(to)}. Wydatki i dostępne kwoty w obu okresach zostaną przeliczone. Zapisać zmiany?`)) return;
+      }
+      const expense = {
+        ...(original || {}),
+        id: original?.id || (crypto.randomUUID ? crypto.randomUUID() : `expense-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+        amount: Core.roundMoney(amount), category: category.name, poolId: category.poolId,
+        date, note, created: original?.created ?? new Date().toISOString()
+      };
+      if (!original && state.expenses.some(item => item.id === expense.id)) throw new Error('Nie udało się utworzyć identyfikatora. Spróbuj ponownie.');
+      const expenses = original ? state.expenses.map(item => item.id === original.id ? expense : item) : [...state.expenses, expense];
+      persistExpenses(expenses, expenseDraft);
+      closeModal();
+      update();
+      const dateLabel = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'long' }).format(Core.parseDateKey(date));
+      showToast(original ? 'Zmiany wydatku zapisane' : date === todayKey ? 'Wydatek dodany' : date < todayKey ? `Wydatek zapisany w historii — ${dateLabel}` : `Wydatek zapisany na ${dateLabel}`);
+    } catch (error) {
+      expenseError(error.message?.includes('Quota') ? 'Brak miejsca na zapis. Wydatek nie został zmieniony.' : error.message || 'Nie udało się zapisać wydatku. Dane nie zostały zmienione.');
+    } finally {
+      expenseBusy = false;
+      form.querySelector('[type=submit]').disabled = false;
+    }
+  }
+
+  function beginExpenseDelete(id) {
+    try { expenseDeleteDraft = expenseSnapshot(id); }
+    catch (error) { showToast(error.message || 'Nie można odczytać danych.'); return; }
+    expenseReturnFocus = document.activeElement;
+    const expense = expenseDeleteDraft.expense;
+    $('#expense-delete-name').textContent = `${expense.note || expense.category} — ${money(expense.amount)} zł`;
+    $('#expense-delete-error').textContent = '';
+    $('#expense-delete-modal').classList.remove('hidden');
+    $('#expense-delete-cancel').focus();
+  }
+
+  function closeExpenseDelete() {
+    expenseDeleteDraft = null;
+    $('#expense-delete-modal').classList.add('hidden');
+    expenseReturnFocus?.focus();
+    expenseReturnFocus = null;
+  }
+
+  function confirmExpenseDelete() {
+    if (expenseBusy || !expenseDeleteDraft) return;
+    expenseBusy = true;
+    $('#expense-delete-confirm').disabled = true;
+    try {
+      const current = expenseSnapshot(expenseDeleteDraft.expense.id);
+      if (current.original !== expenseDeleteDraft.original) throw new Error('Wydatek został zmieniony. Otwórz go ponownie.');
+      persistExpenses(state.expenses.filter(item => item.id !== current.expense.id), expenseDeleteDraft);
+      closeExpenseDelete();
+      update();
+      showToast('Wydatek usunięty');
+    } catch (error) {
+      $('#expense-delete-error').textContent = 'Nie udało się usunąć wydatku. Dane pozostały bez zmian. ' + (error.message || '');
+    } finally { expenseBusy = false; $('#expense-delete-confirm').disabled = false; }
   }
 
   function closeGoalForm() {
@@ -856,6 +987,7 @@
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     closeModal();
+    closeExpenseDelete();
     closeGoalForm();
     closeGoalDelete();
     closeDepositForm();
@@ -863,36 +995,15 @@
     closeRecurringBillDelete();
   });
 
-  $('#expense-form').addEventListener('submit', event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const amount = Number(form.elements.amount.value);
-    if (!(amount > 0) || !form.elements.date.value) return;
-    const expenseDate = form.elements.date.value;
-    const categoryName = form.elements.category.value;
-    state.expenses.push({
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      amount,
-      category: categoryName,
-      poolId: Core.poolForCategory(categoryName),
-      date: expenseDate,
-      note: form.elements.note.value.trim(),
-      created: new Date().toISOString()
-    });
-    save();
-    closeModal();
-    update();
-    const dateLabel = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'long' }).format(Core.parseDateKey(expenseDate));
-    showToast(expenseDate === todayKey ? 'Wydatek dodany' : expenseDate < todayKey ? `Wydatek zapisany w historii — ${dateLabel}` : `Wydatek zapisany na ${dateLabel}`);
-  });
-
+  $('#expense-form').addEventListener('submit', saveExpense);
+  $('#expense-delete-cancel').addEventListener('click', closeExpenseDelete);
+  $('#expense-delete-confirm').addEventListener('click', confirmExpenseDelete);
+  $('#expense-delete-modal').addEventListener('click', event => { if (event.target.id === 'expense-delete-modal') closeExpenseDelete(); });
   document.addEventListener('click', event => {
+    const edit = event.target.closest('[data-edit-expense]');
+    if (edit) { openModal(edit.dataset.editExpense); return; }
     const button = event.target.closest('[data-delete]');
-    if (!button) return;
-    state.expenses = state.expenses.filter(expense => expense.id !== button.dataset.delete);
-    save();
-    update();
-    showToast('Wydatek usunięty');
+    if (button) beginExpenseDelete(button.dataset.delete);
   });
 
   $('#budget-form').addEventListener('submit', event => {

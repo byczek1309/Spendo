@@ -709,3 +709,12 @@ body[data-theme='dark'] .danger-button { border-color: #49392e; background: #302
 .import-consent input { width: 24px; height: 24px; flex-shrink: 0; }
 #import-error { padding: 0 16px; color: var(--red, #c04444); overflow-wrap: anywhere; }
 #import-restore:disabled { opacity: .45; }
+
+/* Expense actions stay below the financial row on narrow screens. */
+#history-list .expense-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; }
+#history-list .expense-edit { grid-column: 2; justify-self: end; }
+#history-list .delete-button { grid-column: 3; }
+.expense-edit { min-height: 44px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--surface-soft); font: inherit; margin-left: auto; }
+#history-list .delete-button { min-width: 44px; flex-basis: 44px; }
+#expense-form > .secondary-button { margin-top: 12px; width: 100%; min-height: 44px; }
+#expense-delete-modal p { overflow-wrap: anywhere; }
