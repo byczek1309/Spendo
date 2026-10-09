@@ -1059,6 +1059,80 @@
     showToast('Kopia danych pobrana');
   });
 
+  let pendingImport = null;
+  let importGeneration = 0;
+  let importBusy = false;
+  function cancelImport() {
+    importGeneration++;
+    pendingImport = null;
+    $('#import-file').value = '';
+    $('#import-consent').checked = false;
+    $('#import-restore').disabled = true;
+    $('#import-preview').classList.add('hidden');
+    $('#import-error').textContent = '';
+  }
+  $('#import-data').addEventListener('click', () => {
+    if (importBusy) return;
+    cancelImport();
+    $('#import-file').click();
+  });
+  $('#import-cancel').addEventListener('click', cancelImport);
+  $('#import-export').addEventListener('click', () => $('#export-data').click());
+  $('#import-consent').addEventListener('change', () => {
+    $('#import-restore').disabled = importBusy || !pendingImport || !$('#import-consent').checked;
+  });
+  $('#import-file').addEventListener('change', async event => {
+    const file = event.target.files[0];
+    cancelImport();
+    if (!file) return;
+    const generation = importGeneration;
+    $('#import-preview').classList.remove('hidden');
+    $('#import-info').textContent = `${file.name} · ${Math.ceil(file.size / 1024)} KB`;
+    $('#import-summary').textContent = 'Sprawdzanie kopii…';
+    try {
+      if (!/\.json$/i.test(file.name)) throw new Error('Wybierz plik z rozszerzeniem .json.');
+      if (file.size > window.SpendoBackup.MAX_BYTES) throw new Error('Plik jest zbyt duży. Maksymalny rozmiar kopii to 5 MB.');
+      const content = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reader.onabort = () => reject(new Error('Nie udało się odczytać pliku. Wybierz go ponownie.'));
+        reader.readAsText(file);
+      });
+      if (generation !== importGeneration) return;
+      const prepared = window.SpendoBackup.prepare(content);
+      const expected = localStorage.getItem(KEY);
+      pendingImport = { prepared, expected };
+      const copy = prepared.state;
+      $('#import-summary').textContent = `Wydatki: ${copy.expenses.length} · Okresy: ${Object.keys(copy.budgets).length} · Cele: ${copy.savingsGoals.length} · Stałe rachunki: ${copy.recurringBills.length} · Wersja danych: ${prepared.version} · Migracja: ${prepared.migrated ? 'tak, do wersji 6' : 'nie'}.`;
+    } catch (error) {
+      if (generation !== importGeneration) return;
+      $('#import-summary').textContent = 'Kopia nie jest gotowa do przywrócenia.';
+      $('#import-error').textContent = error.message || 'Nie udało się sprawdzić kopii.';
+    }
+  });
+  $('#import-restore').addEventListener('click', () => {
+    if (importBusy || !pendingImport || !$('#import-consent').checked) return;
+    importBusy = true;
+    $('#import-restore').disabled = true;
+    try {
+      const restored = window.SpendoBackup.restore(localStorage, pendingImport.prepared, pendingImport.expected);
+      state = restored;
+      selectedPeriod = Core.periodForDate(todayKey, state.payday);
+      selectedMonth = Core.monthKey(today);
+      selectedDay = '';
+      budgetGoalsSectionEnabled = null;
+      $('#payday-select').value = String(state.payday);
+      cancelImport();
+      applyTheme();
+      update();
+      showToast('Kopia przywrócona');
+    } catch (error) {
+      pendingImport = null;
+      $('#import-consent').checked = false;
+      $('#import-error').textContent = error.message || 'Nie udało się przywrócić kopii.';
+    } finally { importBusy = false; }
+  });
+
   $('#payday-select').value = String(state.payday);
   applyTheme();
   update();

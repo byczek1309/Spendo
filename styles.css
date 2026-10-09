@@ -702,3 +702,10 @@ body[data-theme='dark'] .danger-button { border-color: #49392e; background: #302
   .setting-row select { max-width: min(150px, 42vw); font-size: 16px; }
   .budget-goal-row .input-wrap input { font-size: 16px; }
 }
+
+#import-preview { padding: 16px; overflow-wrap: anywhere; }
+#import-preview button { width: 100%; margin: 8px 0; min-height: 44px; }
+.import-consent { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; }
+.import-consent input { width: 24px; height: 24px; flex-shrink: 0; }
+#import-error { padding: 0 16px; color: var(--red, #c04444); overflow-wrap: anywhere; }
+#import-restore:disabled { opacity: .45; }

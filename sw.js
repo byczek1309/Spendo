@@ -1,5 +1,5 @@
-const CACHE = 'spendo-v33';
-const CORE = ['/', '/index.html', '/styles.css', '/budget-core.js', '/app.js', '/manifest.webmanifest', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'spendo-v34';
+const CORE = ['/', '/index.html', '/styles.css', '/budget-core.js', '/backup-core.js', '/app.js', '/manifest.webmanifest', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
