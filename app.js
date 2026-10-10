@@ -183,7 +183,7 @@
     const status = $('#status-message');
     status.classList.toggle('over', isCurrentPeriod && plan.overspend > 0);
     if (!isCurrentPeriod) status.textContent = `Okres budżetowy: ${periodLabel(selectedPeriod)}`;
-    else if (plan.overspend > 0) status.textContent = `↗ Limit przekroczony o ${money(plan.overspend)} zł. Spendo nie blokuje wydatków — pozostały budżet przeliczono na kolejne dni.${plan.daysAfterToday ? ` Od jutra: ${whole(plan.nextDailyLimit)} zł dziennie.` : ' To ostatni dzień tego okresu.'}`;
+    else if (plan.overspend > 0) status.textContent = `↗ Limit przekroczony o ${money(plan.overspend)} zł. Pulnora nie blokuje wydatków — pozostały budżet przeliczono na kolejne dni.${plan.daysAfterToday ? ` Od jutra: ${whole(plan.nextDailyLimit)} zł dziennie.` : ' To ostatni dzień tego okresu.'}`;
     else status.textContent = `✓ Zostało ${money(plan.safeToday)} zł z dzisiejszego limitu`;
 
     const list = $('#today-expenses');
@@ -1256,7 +1256,7 @@
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const anchor = document.createElement('a');
     anchor.href = URL.createObjectURL(blob);
-    anchor.download = `Spendo-kopia-${todayKey}.json`;
+    anchor.download = `Pulnora-kopia-${todayKey}.json`;
     anchor.click();
     URL.revokeObjectURL(anchor.href);
     showToast('Kopia danych pobrana');

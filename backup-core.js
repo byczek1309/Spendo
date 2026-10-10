@@ -34,7 +34,7 @@
     safeTree(source);
     check(object(source), 'stan aplikacji');
     const v = source.schemaVersion;
-    if (Number.isInteger(v) && v > 6) fail('Ta kopia wymaga nowszej wersji Spendo. Zaktualizuj aplikację.');
+    if (Number.isInteger(v) && v > 6) fail('Ta kopia wymaga nowszej wersji Pulnora. Zaktualizuj aplikację.');
     check(Number.isInteger(v) && v >= 2 && v <= 6, 'obsługiwana wersja danych (2–6)');
     check(Number.isInteger(source.payday) && source.payday >= 1 && source.payday <= 31, 'payday');
     check(['system', 'light', 'dark'].includes(source.theme), 'theme');
