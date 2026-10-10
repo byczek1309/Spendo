@@ -505,6 +505,11 @@
 
   function renderStats(expenses, amounts) {
     $('#stats-period').textContent = periodLabel(selectedPeriod);
+    const ongoing = Core.dateIsInPeriod(todayKey, selectedPeriod);
+    $('#stats-period-note').textContent = ongoing
+      ? 'Ten okres jeszcze trwa — statystyki nie obejmują pełnego okresu. Porównanie procentowe zestawia jego zapisane wydatki Na życie z całym poprzednim okresem.'
+      : '';
+    $('#stats-period-note').classList.toggle('hidden', !ongoing);
     const hasExpenses = expenses.length > 0;
     $('#stats-empty').classList.toggle('hidden', hasExpenses);
     $('#stats-content').classList.toggle('hidden', !hasExpenses);

@@ -729,3 +729,8 @@ body[data-theme='dark'] .danger-button { border-color: #49392e; background: #302
 .budget-preview-life-row dt { color: var(--ink); font-weight: 600; }
 #budget-preview-message { margin: 12px 0 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 #budget-preview-message.budget-preview-warning { color: var(--ink); font-weight: 600; }
+
+.financial-note, .stats-spend-card .financial-note, .budget-goal-allocation > .financial-note {
+  color: var(--ink); font-size: 13px; font-weight: 400; line-height: 1.5; overflow-wrap: anywhere;
+}
+p.financial-note { margin: 10px 0; }
