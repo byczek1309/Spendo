@@ -246,6 +246,7 @@
   }
 
   function renderBudget(budget, amounts, spending) {
+    updatePaydayControl();
     const configured = hasBudget();
     $('#budget-setup-note').classList.toggle('hidden', configured);
     $('.budget-total').classList.toggle('hidden', !configured);
@@ -1205,11 +1206,48 @@
     document.querySelector('meta[name=theme-color]').content = dark ? '#161a17' : '#f6f5f1';
   }
   $('#theme-select').addEventListener('change', event => { state.theme = event.target.value; save(); applyTheme(); });
-  $('#payday-select').addEventListener('change', event => {
-    state.payday = Core.normalizedPayday(event.target.value);
-    selectedPeriod = Core.periodForDate(todayKey, state.payday);
+  function isPaydayLocked() {
+    return Object.keys(state.budgets).length > 0 || state.expenses.length > 0;
+  }
+
+  function updatePaydayControl() {
+    const locked = isPaydayLocked();
+    $('#payday-select').disabled = locked;
     $('#payday-select').value = String(state.payday);
-    save();
+    $('#payday-lock-note').textContent = Object.keys(state.budgets).length > 0
+      ? 'Zmiana dnia wypłaty jest chwilowo niedostępna po zapisaniu budżetu. Chronimy w ten sposób historię Twoich okresów i wydatków.'
+      : 'Zmiana dnia wypłaty jest chwilowo niedostępna, ponieważ masz zapisane wydatki. Chronimy w ten sposób historię Twoich okresów i wydatków.';
+    $('#payday-lock-note').classList.toggle('hidden', !locked);
+  }
+
+  $('#payday-select').addEventListener('change', event => {
+    const requested = Number(event.target.value);
+    // Restore the displayed saved value before any validation or write.
+    $('#payday-select').value = String(state.payday);
+    $('#payday-error').textContent = '';
+    $('#payday-error').classList.add('hidden');
+    if (isPaydayLocked()) {
+      updatePaydayControl();
+      return;
+    }
+    if (!Number.isInteger(requested) || requested < 1 || requested > 31 || requested === state.payday) return;
+    const next = { ...state, payday: requested };
+    try {
+      // Refuse to overwrite data saved by another tab or an external restore.
+      const stored = localStorage.getItem(KEY);
+      if (stored !== null && JSON.stringify(JSON.parse(stored)) !== JSON.stringify(state)) {
+        $('#payday-error').textContent = 'Dane na urządzeniu zmieniły się. Odśwież aplikację przed zmianą dnia wypłaty.';
+        $('#payday-error').classList.remove('hidden');
+        return;
+      }
+      localStorage.setItem(KEY, JSON.stringify(next));
+    } catch {
+      $('#payday-error').textContent = 'Nie udało się zapisać dnia wypłaty. Poprzednie ustawienie pozostaje bez zmian. Spróbuj ponownie.';
+      $('#payday-error').classList.remove('hidden');
+      return;
+    }
+    state = next;
+    selectedPeriod = Core.periodForDate(todayKey, state.payday);
     update();
     showToast('Okres budżetowy zaktualizowany');
   });
