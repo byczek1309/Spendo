@@ -9,3 +9,6 @@ wrangler.jsonc
 .dev.vars*
 .DS_Store
 *.log
+tests/
+wrangler.pulnora.jsonc
+node_modules/
