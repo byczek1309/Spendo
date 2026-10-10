@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <radialGradient id="bg" cx="78%" cy="10%" r="118%"><stop offset="0" stop-color="#29374b"/><stop offset="0.49" stop-color="#111d2b"/><stop offset="1" stop-color="#0a1320"/></radialGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff4d9"/><stop offset="0.26" stop-color="#f3dba9"/><stop offset="0.65" stop-color="#d7ad65"/><stop offset="1" stop-color="#9c6c38"/></linearGradient>
+  <linearGradient id="wave" x1="0" y1="0" x2="0.75" y2="1"><stop offset="0" stop-color="#fff6dc"/><stop offset="0.48" stop-color="#edc887"/><stop offset="1" stop-color="#b58a4f"/></linearGradient>
+  <linearGradient id="waveShadow" x1="0.2" y1="0" x2="0.95" y2="1"><stop offset="0" stop-color="#78512d" stop-opacity="0"/><stop offset="1" stop-color="#6c4e2f" stop-opacity="0.7"/></linearGradient>
+  <linearGradient id="warm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0ad71" stop-opacity="0"/><stop offset="1" stop-color="#9a6943" stop-opacity="0.18"/></linearGradient>
+  <filter id="lightShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#000000" flood-opacity="0.27"/></filter>
+</defs>
+<rect width="1024" height="1024" fill="url(#bg)"/>
+<rect y="620" width="1024" height="404" fill="url(#warm)"/>
+<g filter="url(#lightShadow)">
+ <!-- open rear pocket/card peeking out of the main wallet -->
+ <path d="M320 393 L655 304 Q715 290 726 346 L726 431 L697 431 L697 361 Q697 332 663 339 L349 415 Z" fill="url(#gold)"/>
+ <!-- upper contour and body of main wallet -->
+ <rect x="233" y="404" width="565" height="363" rx="61" fill="none" stroke="url(#gold)" stroke-width="27"/>
+ <!-- calm ribbon of money flow: single sweeping band -->
+ <path d="M236 602 C311 499 397 493 486 532 C567 567 625 650 710 651 C749 652 778 637 795 599
+       L795 661 C770 715 727 725 685 711 C597 685 542 597 459 565 C373 532 308 549 236 602 Z" fill="url(#wave)"/>
+ <path d="M463 565 C546 598 602 685 686 711 C731 725 773 704 795 664 L795 680 C765 733 719 732 680 716 C594 686 533 602 463 565 Z" fill="url(#waveShadow)"/>
+ <!-- button / clasp -->
+ <circle cx="735" cy="530" r="32" fill="url(#gold)"/>
+ <circle cx="735" cy="530" r="31" stroke="#fff2d7" stroke-opacity="0.55" stroke-width="2" fill="none"/>
+</g>
+</svg>
