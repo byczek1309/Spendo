@@ -718,3 +718,14 @@ body[data-theme='dark'] .danger-button { border-color: #49392e; background: #302
 #history-list .delete-button { min-width: 44px; flex-basis: 44px; }
 #expense-form > .secondary-button { margin-top: 12px; width: 100%; min-height: 44px; }
 #expense-delete-modal p { overflow-wrap: anywhere; }
+
+.budget-form-summary { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-soft); min-width: 0; }
+.budget-form-summary h4 { margin: 0 0 12px; }
+.budget-form-summary dl { margin: 0; }
+.budget-form-summary dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding: 7px 0; }
+.budget-form-summary dt { color: var(--muted); font-size: 13px; }
+.budget-form-summary dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.budget-preview-life-row { border-top: 1px solid var(--line); margin-top: 6px; }
+.budget-preview-life-row dt { color: var(--ink); font-weight: 600; }
+#budget-preview-message { margin: 12px 0 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+#budget-preview-message.budget-preview-warning { color: var(--ink); font-weight: 600; }

@@ -386,6 +386,48 @@
     row.querySelector('.recurring-bill-amount').textContent = `${money(template.amount)} zł`;
   }
 
+  function budgetFormPreview() {
+    const form = $('#budget-form');
+    const amounts = {};
+    for (const name of ['income', 'bills', 'fuel', 'savings']) {
+      const raw = form.elements[name].value;
+      if (name === 'income' && String(raw).trim() === '') {
+        return { error: 'Wpisz dochód na okres. Jeśli nie masz dochodu, wpisz świadomie 0 zł.' };
+      }
+      const value = parseOptionalDecimalAmount(raw);
+      const rounded = Core.roundMoney(value);
+      if (!Number.isFinite(value) || value < 0 || !Number.isFinite(rounded)) {
+        return { error: `Wpisz poprawną, nieujemną kwotę w polu „${({ income: 'Dochód na okres', bills: 'Inne rachunki (poza wybranymi)', fuel: 'Limit paliwa', savings: 'Planowane oszczędności' })[name]}”.` };
+      }
+      amounts[name] = rounded;
+    }
+    const selected = selectedBillPlanFromForm();
+    if (selected.error) return { error: 'Nie można poprawnie obliczyć zaznaczonych rachunków. Sprawdź ich kwoty.' };
+    const otherBills = amounts.bills;
+    amounts.bills = Core.roundMoney(otherBills + selected.total);
+    const reserved = Core.roundMoney(amounts.bills + amounts.fuel + amounts.savings);
+    if (!Number.isFinite(amounts.bills) || !Number.isFinite(reserved)) return { error: 'Suma zaplanowanych kwot jest za duża do obliczenia.' };
+    const life = Core.roundMoney(amounts.income - reserved);
+    if (!Number.isFinite(life)) return { error: 'Nie można poprawnie obliczyć kwoty Na życie.' };
+    return { amounts, otherBills, selected, life, deficit: life < 0 ? -life : 0 };
+  }
+
+  function updateBudgetFormSummary() {
+    const preview = budgetFormPreview();
+    for (const name of ['income', 'bills', 'fuel', 'savings']) {
+      $(`#budget-preview-${name}`).textContent = preview.amounts ? `${money(preview.amounts[name])} zł` : '—';
+    }
+    $('#budget-preview-life').textContent = preview.amounts ? `${money(preview.life)} zł` : '—';
+    const message = preview.error || (preview.deficit > 0
+      ? `Zaplanowane wydatki i oszczędności przekraczają dochód o ${money(preview.deficit)} zł. Zmniejsz kwoty lub popraw dochód, aby zapisać plan.`
+      : preview.amounts.income === 0
+        ? 'Wpisano 0 zł dochodu. Ten plan nie zapewnia pieniędzy Na życie; dzienny limit wyniesie 0 zł. Możesz zapisać plan, jeśli wszystkie rezerwacje wynoszą 0 zł.'
+        : 'Na życie to dochód pomniejszony o rachunki, paliwo i planowane oszczędności.');
+    $('#budget-preview-message').textContent = message;
+    $('#budget-preview-message').classList.toggle('budget-preview-warning', !!preview.error || preview.deficit > 0 || preview.amounts?.income === 0);
+    return preview;
+  }
+
   function updateBudgetBillSummary() {
     const manualValue = parseOptionalDecimalAmount($('#budget-form').elements.bills.value);
     const manual = Core.roundMoney(manualValue);
@@ -405,6 +447,7 @@
         : '';
     $('#bill-plan-error').textContent = error;
     $('#bill-plan-error').classList.toggle('hidden', !error);
+    updateBudgetFormSummary();
   }
 
   function refreshRecurringBillLibraryPreservingDraft() {
@@ -1006,101 +1049,106 @@
     if (button) beginExpenseDelete(button.dataset.delete);
   });
 
+  let budgetSaveBusy = false;
   $('#budget-form').addEventListener('submit', event => {
     event.preventDefault();
+    if (budgetSaveBusy) return;
     const form = event.currentTarget;
-    const amounts = {};
-    for (const name of ['income', 'bills', 'fuel', 'savings']) {
-      const value = parseOptionalDecimalAmount(form.elements[name].value);
-      if (!Number.isFinite(value) || value < 0) {
-        $('#budget-form-error').textContent = `Wpisz poprawną, nieujemną kwotę w polu „${({ income: 'Dochód na okres', bills: 'Inne rachunki (poza wybranymi)', fuel: 'Limit paliwa', savings: 'Planowane oszczędności' })[name]}”.`;
+    budgetSaveBusy = true;
+    const submit = form.querySelector('[type=submit]');
+    submit.disabled = true;
+    try {
+      const preview = updateBudgetFormSummary();
+      if (preview.error || preview.deficit > 0) {
+        $('#budget-form-error').textContent = preview.error || `Zaplanowane wydatki i oszczędności przekraczają dochód o ${money(preview.deficit)} zł. Zmniejsz kwoty lub popraw dochód, aby zapisać plan.`;
         $('#budget-form-error').classList.remove('hidden');
         return;
       }
-      amounts[name] = Core.roundMoney(value);
-    }
+      const amounts = preview.amounts;
+      const remainingBills = preview.otherBills;
+      const selectedBillPlan = preview.selected;
+      const firstBudget = Object.keys(state.budgets).length === 0;
 
-    const remainingBills = amounts.bills;
-    const selectedBillPlan = selectedBillPlanFromForm();
-    if (selectedBillPlan.error) {
-      $('#bill-plan-error').textContent = 'Nie można poprawnie obliczyć zaznaczonych rachunków. Sprawdź ich kwoty i spróbuj ponownie.';
-      $('#bill-plan-error').classList.remove('hidden');
-      return;
-    }
-    amounts.bills = Core.roundMoney(remainingBills + selectedBillPlan.total);
-    if (!Number.isFinite(amounts.bills)) {
-      $('#bill-plan-error').textContent = 'Łączna kwota Rachunków jest za duża do obliczenia.';
-      $('#bill-plan-error').classList.remove('hidden');
-      return;
-    }
-
-    const allocationEnabled = $('#budget-goals-toggle').checked;
-    const proposedContributions = new Map();
-    let assigned = Core.activeGoalContributions(state.savingsGoals);
-    if (allocationEnabled) {
-      const inputs = $$('[data-goal-contribution]');
-      const parsed = inputs.map(input => ({ id: input.dataset.goalContribution, value: parseOptionalDecimalAmount(input.value) }));
-      if (parsed.some(item => !Number.isFinite(item.value) || item.value < 0)) {
-        $('#budget-goal-error').textContent = 'Wpisz poprawne kwoty nieujemne, z maksymalnie dwoma miejscami po przecinku.';
-        $('#budget-goal-error').classList.remove('hidden');
-        return;
-      }
-      parsed.forEach(item => proposedContributions.set(item.id, item.value));
-      assigned = Core.roundMoney(parsed.reduce((sum, item) => sum + item.value, 0));
-      if (!Number.isFinite(assigned)) {
-        $('#budget-goal-error').textContent = 'Suma składek jest za duża do obliczenia.';
-        $('#budget-goal-error').classList.remove('hidden');
-        return;
-      }
-    }
-    if (assigned > amounts.savings) {
-      $('#budget-form-error').textContent = `Aktywne składki celów wynoszą ${money(assigned)} zł, a pula Oszczędności ${money(amounts.savings)} zł. Zwiększ pulę albo zaznacz przypisywanie do celów i zmniejsz składki.`;
-      $('#budget-form-error').classList.remove('hidden');
+      const allocationEnabled = $('#budget-goals-toggle').checked;
+      const proposedContributions = new Map();
+      let assigned = Core.activeGoalContributions(state.savingsGoals);
       if (allocationEnabled) {
-        $('#budget-goal-error').textContent = `Przypisano ${money(assigned)} zł, czyli o ${money(assigned - amounts.savings)} zł więcej niż pula Oszczędności (${money(amounts.savings)} zł). Zmniejsz składki lub zwiększ pulę.`;
-        $('#budget-goal-error').classList.remove('hidden');
+        const inputs = $$('[data-goal-contribution]');
+        const parsed = inputs.map(input => ({ id: input.dataset.goalContribution, value: parseOptionalDecimalAmount(input.value) }));
+        if (parsed.some(item => !Number.isFinite(item.value) || item.value < 0)) {
+          $('#budget-goal-error').textContent = 'Wpisz poprawne kwoty nieujemne, z maksymalnie dwoma miejscami po przecinku.';
+          $('#budget-goal-error').classList.remove('hidden');
+          return;
+        }
+        parsed.forEach(item => proposedContributions.set(item.id, item.value));
+        assigned = Core.roundMoney(parsed.reduce((sum, item) => sum + item.value, 0));
+        if (!Number.isFinite(assigned)) {
+          $('#budget-goal-error').textContent = 'Suma składek jest za duża do obliczenia.';
+          $('#budget-goal-error').classList.remove('hidden');
+          return;
+        }
       }
-      return;
-    }
+      if (assigned > amounts.savings) {
+        $('#budget-form-error').textContent = `Aktywne składki celów wynoszą ${money(assigned)} zł, a pula Oszczędności ${money(amounts.savings)} zł. Zwiększ pulę albo zaznacz przypisywanie do celów i zmniejsz składki.`;
+        $('#budget-form-error').classList.remove('hidden');
+        if (allocationEnabled) {
+          $('#budget-goal-error').textContent = `Przypisano ${money(assigned)} zł, czyli o ${money(assigned - amounts.savings)} zł więcej niż pula Oszczędności (${money(amounts.savings)} zł). Zmniejsz składki lub zwiększ pulę.`;
+          $('#budget-goal-error').classList.remove('hidden');
+        }
+        return;
+      }
 
-    const planKey = selectedPeriod.planMonth;
-    const previousPlan = state.budgets[planKey] || {};
-    const previousBills = Array.isArray(previousPlan.selectedBills) ? previousPlan.selectedBills : [];
-    const proposedBillById = new Map(selectedBillPlan.bills.map(bill => [bill.id, bill]));
-    const changedPaidBills = previousBills.filter(previous => {
-      if (previous.paid !== true) return false;
-      const next = proposedBillById.get(previous.id);
-      return !next || next.name !== previous.name || Core.roundMoney(Number(next.amount)) !== Core.roundMoney(Number(previous.amount));
-    });
-    if (changedPaidBills.length) {
-      const details = changedPaidBills.map(bill => `• ${bill.name} — ${money(Number(bill.amount))} zł`).join('\n');
-      const confirmed = window.confirm(`Te rachunki są oznaczone jako opłacone:\n${details}\n\nZmiana planu usunie lub zastąpi ich zapisany status w tym okresie. Czy chcesz kontynuować?`);
-      if (!confirmed) return;
-    }
-    const selectedBills = selectedBillPlan.bills.map(bill => {
-      const previous = previousBills.find(item => item.id === bill.id
-        && item.name === bill.name
-        && Core.roundMoney(Number(item.amount)) === Core.roundMoney(Number(bill.amount)));
-      return { ...bill, paid: previous?.paid === true };
-    });
-
-    if (allocationEnabled) {
-      allocatableGoals().forEach(goal => {
-        if (proposedContributions.has(goal.id)) goal.contributionPerPeriod = Core.roundGoalMoney(proposedContributions.get(goal.id));
+      const planKey = selectedPeriod.planMonth;
+      const previousPlan = state.budgets[planKey] || {};
+      const previousBills = Array.isArray(previousPlan.selectedBills) ? previousPlan.selectedBills : [];
+      const proposedBillById = new Map(selectedBillPlan.bills.map(bill => [bill.id, bill]));
+      const changedPaidBills = previousBills.filter(previous => {
+        if (previous.paid !== true) return false;
+        const next = proposedBillById.get(previous.id);
+        return !next || next.name !== previous.name || Core.roundMoney(Number(next.amount)) !== Core.roundMoney(Number(previous.amount));
       });
+      if (changedPaidBills.length) {
+        const details = changedPaidBills.map(bill => `• ${bill.name} — ${money(Number(bill.amount))} zł`).join('\n');
+        const confirmed = window.confirm(`Te rachunki są oznaczone jako opłacone:\n${details}\n\nZmiana planu usunie lub zastąpi ich zapisany status w tym okresie. Czy chcesz kontynuować?`);
+        if (!confirmed) return;
+      }
+      const selectedBills = selectedBillPlan.bills.map(bill => {
+        const previous = previousBills.find(item => item.id === bill.id
+          && item.name === bill.name
+          && Core.roundMoney(Number(item.amount)) === Core.roundMoney(Number(bill.amount)));
+        return { ...bill, paid: previous?.paid === true };
+      });
+
+      const activeIds = new Set(allocatableGoals().map(goal => goal.id));
+      const next = {
+        ...state,
+        budgets: {
+          ...state.budgets,
+          [planKey]: { ...previousPlan, ...amounts, otherBills: remainingBills, selectedBills }
+        },
+        savingsGoals: allocationEnabled ? state.savingsGoals.map(goal =>
+          activeIds.has(goal.id) && proposedContributions.has(goal.id)
+            ? { ...goal, contributionPerPeriod: Core.roundGoalMoney(proposedContributions.get(goal.id)) }
+            : goal) : state.savingsGoals
+      };
+      // Commit the complete plan before replacing the in-memory state or navigating.
+      try { localStorage.setItem(KEY, JSON.stringify(next)); }
+      catch {
+        $('#budget-form-error').textContent = 'Nie udało się zapisać budżetu na urządzeniu (np. brak miejsca). Dane nie zostały zmienione. Spróbuj ponownie.';
+        $('#budget-form-error').classList.remove('hidden');
+        return;
+      }
+      state = next;
+      $('#budget-form-error').classList.add('hidden');
+      $('#budget-goal-error').classList.add('hidden');
+      $('#bill-plan-error').classList.add('hidden');
+      update();
+      if (firstBudget) showScreen('today');
+      showToast(firstBudget ? 'Budżet gotowy' : 'Plan zapisany');
+    } finally {
+      budgetSaveBusy = false;
+      submit.disabled = false;
     }
-    state.budgets[planKey] = {
-      ...previousPlan,
-      ...amounts,
-      otherBills: remainingBills,
-      selectedBills
-    };
-    $('#budget-form-error').classList.add('hidden');
-    $('#budget-goal-error').classList.add('hidden');
-    $('#bill-plan-error').classList.add('hidden');
-    save();
-    update();
-    showToast('Plan zapisany');
   });
 
   $('#budget-goals-toggle').addEventListener('change', event => {
@@ -1115,6 +1163,7 @@
     updateBudgetGoalAllocationSummary();
     updateBudgetBillSummary();
   });
+  $('#budget-form').addEventListener('change', updateBudgetFormSummary);
   $('#budget-go-to-goals').addEventListener('click', () => showScreen('goals'));
 
   $('#prev-month').addEventListener('click', () => shiftMonth(-1));
