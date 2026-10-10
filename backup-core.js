@@ -30,7 +30,7 @@
       validate(item);
     });
   }
-  function validate(source) {
+  function validate(source, { localState = false } = {}) {
     safeTree(source);
     check(object(source), 'stan aplikacji');
     const v = source.schemaVersion;
@@ -60,7 +60,7 @@
       check(text(goal.name) && goal.name.trim(), 'nazwa celu');
       ['targetAmount', 'savedAmount', 'contributionPerPeriod'].forEach(field => check(amount(goal[field]), `cel.${field}`));
       check(goal.targetDate === '' || date(goal.targetDate), 'targetDate');
-      check(goal.lastAccruedPeriod === '' || date(goal.lastAccruedPeriod), 'lastAccruedPeriod');
+      check((localState && goal.lastAccruedPeriod === undefined) || goal.lastAccruedPeriod === '' || date(goal.lastAccruedPeriod), 'lastAccruedPeriod');
       check(stamp(goal.createdAt) && typeof goal.active === 'boolean', 'ustawienia celu');
       check(typeof goal.savedAmountConfirmed === 'boolean' || (v === 2 && goal.savedAmountConfirmed === undefined), 'savedAmountConfirmed');
     });
@@ -101,5 +101,5 @@
       fail('Nie udało się odczytać przywróconej kopii. Poprzednie dane zostały zachowane.');
     }
   }
-  root.SpendoBackup = Object.freeze({ MAX_BYTES, prepare, restore });
+  root.SpendoBackup = Object.freeze({ MAX_BYTES, validate, prepare, restore });
 })(window);

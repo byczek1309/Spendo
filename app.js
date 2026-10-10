@@ -27,17 +27,38 @@
   let billToDelete = '';
   let budgetGoalsSectionEnabled = null;
   let state;
-  try {
-    const normalized = Core.normalizeState(JSON.parse(localStorage.getItem(KEY) || '{}'));
-    state = normalized.state;
-    if (normalized.migrated) localStorage.setItem(KEY, JSON.stringify(state));
-  } catch {
-    state = Core.blankState();
+  function showDataProtection(message) {
+    $('#data-protection-message').textContent = message;
+    $('#data-protection').classList.remove('hidden');
+    $('.app-shell').classList.add('hidden');
+    $$('.modal-backdrop').forEach(modal => modal.classList.add('hidden'));
+  }
+  const storage = window.SpendoDataSafety.create(() => window.localStorage, showDataProtection);
+  try { state = storage.load(); }
+  catch {
+    // No handlers or financial views are initialized for unreadable data.
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('/sw.js').catch(() => {});
+    return;
   }
   selectedPeriod = Core.periodForDate(todayKey, state.payday);
+  window.addEventListener('storage', event => {
+    if (event.key === KEY || event.key === null) { try { storage.check(); } catch { /* protection already displayed */ } }
+  });
+  window.addEventListener('focus', () => { try { storage.check(); } catch { /* protection already displayed */ } });
 
   function save() {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    try {
+      storage.setItem(KEY, JSON.stringify(state));
+      $('#data-save-error').classList.add('hidden');
+      return true;
+    } catch (error) {
+      state = storage.snapshotState();
+      applyTheme();
+      update();
+      $('#data-save-error').textContent = error.message;
+      $('#data-save-error').classList.remove('hidden');
+      return false;
+    }
   }
 
   function getBudget(period = selectedPeriod) {
@@ -315,7 +336,7 @@
     const bill = savedBudget.selectedBills.find(item => item.id === id);
     if (!bill) return;
     bill.paid = bill.paid !== true;
-    save();
+    if (!save()) return;
     renderBillPayments(savedBudget, true);
     [...$('#bill-payments-list').querySelectorAll('[data-bill-payment-toggle]')]
       .find(button => button.dataset.billPaymentToggle === id)?.focus();
@@ -609,13 +630,13 @@
 
   function readExpenseStorage() {
     let stored;
-    try { stored = localStorage.getItem(KEY); }
+    try { stored = storage.getItem(KEY); }
     catch { throw new Error('Nie można odczytać danych urządzenia. Spróbuj ponownie.'); }
     if (stored !== null) {
       let saved;
-      try { saved = JSON.parse(stored); }
+      try { saved = Core.normalizeState(JSON.parse(stored)).state; }
       catch { throw new Error('Zapisane dane są nieczytelne. Zachowaj kopię przed dalszymi zmianami.'); }
-      if (JSON.stringify(saved) !== JSON.stringify(state)) throw new Error('Dane na urządzeniu zmieniły się. Odśwież aplikację przed edycją.');
+      if (JSON.stringify(saved) !== JSON.stringify(Core.normalizeState(state).state)) throw new Error('Dane na urządzeniu zmieniły się. Odśwież aplikację przed edycją.');
     }
     return stored;
   }
@@ -659,7 +680,7 @@
   function persistExpenses(expenses, draft) {
     if (readExpenseStorage() !== draft.stored) throw new Error('Dane zmieniły się od otwarcia formularza. Odśwież aplikację i otwórz wydatek ponownie.');
     const next = { ...state, expenses };
-    try { localStorage.setItem(KEY, JSON.stringify(next)); }
+    try { storage.setItem(KEY, JSON.stringify(next)); }
     catch { throw new Error('Nie udało się zapisać danych na urządzeniu (np. brak miejsca). Dane nie zostały zmienione.'); }
     state = next;
   }
@@ -838,7 +859,7 @@
     };
     if (existing) state.recurringBills = state.recurringBills.map(item => item.id === existing.id ? bill : item);
     else state.recurringBills.push(bill);
-    save();
+    if (!save()) return;
     closeRecurringBillForm();
     refreshRecurringBillLibraryPreservingDraft();
     showToast(existing ? 'Rachunek zaktualizowany' : 'Rachunek dodany');
@@ -860,7 +881,7 @@
   function confirmRecurringBillDelete() {
     if (!billToDelete) return;
     state.recurringBills = state.recurringBills.filter(bill => bill.id !== billToDelete);
-    save();
+    if (!save()) return;
     closeRecurringBillDelete();
     refreshRecurringBillLibraryPreservingDraft();
     showToast('Rachunek usunięty');
@@ -880,7 +901,7 @@
       return;
     }
     goal.savedAmount = Core.roundGoalMoney(Number(goal.savedAmount) + amount);
-    save();
+    if (!save()) return;
     closeDepositForm();
     update();
     showToast(Core.goalRemaining(goal) <= 0 ? 'Cel osiągnięty' : 'Oszczędności dodane');
@@ -944,7 +965,7 @@
       return;
     }
     state.savingsGoals = proposedGoals;
-    save();
+    if (!save()) return;
     closeGoalForm();
     update();
     showToast(existing ? 'Cel zaktualizowany' : 'Cel dodany');
@@ -1012,7 +1033,7 @@
   $('#goal-delete-modal [data-action=confirm-goal-delete]').addEventListener('click', () => {
     if (!goalToDelete) return;
     state.savingsGoals = state.savingsGoals.filter(goal => goal.id !== goalToDelete);
-    save();
+    if (!save()) return;
     closeGoalDelete();
     update();
     showToast('Cel usunięty');
@@ -1028,7 +1049,7 @@
     else if (button.dataset.goalAction === 'delete') beginGoalDelete(goal.id);
     else if (button.dataset.goalAction === 'pause') {
       goal.active = !goal.active;
-      save();
+      if (!save()) return;
       update();
       showToast(goal.active ? 'Cel wznowiony' : 'Cel wstrzymany');
     }
@@ -1138,7 +1159,7 @@
             : goal) : state.savingsGoals
       };
       // Commit the complete plan before replacing the in-memory state or navigating.
-      try { localStorage.setItem(KEY, JSON.stringify(next)); }
+      try { storage.setItem(KEY, JSON.stringify(next)); }
       catch {
         $('#budget-form-error').textContent = 'Nie udało się zapisać budżetu na urządzeniu (np. brak miejsca). Dane nie zostały zmienione. Spróbuj ponownie.';
         $('#budget-form-error').classList.remove('hidden');
@@ -1205,7 +1226,7 @@
     $('#theme-select').value = preference;
     document.querySelector('meta[name=theme-color]').content = dark ? '#161a17' : '#f6f5f1';
   }
-  $('#theme-select').addEventListener('change', event => { state.theme = event.target.value; save(); applyTheme(); });
+  $('#theme-select').addEventListener('change', event => { state.theme = event.target.value; if (!save()) return; applyTheme(); });
   function isPaydayLocked() {
     return Object.keys(state.budgets).length > 0 || state.expenses.length > 0;
   }
@@ -1234,13 +1255,13 @@
     const next = { ...state, payday: requested };
     try {
       // Refuse to overwrite data saved by another tab or an external restore.
-      const stored = localStorage.getItem(KEY);
-      if (stored !== null && JSON.stringify(JSON.parse(stored)) !== JSON.stringify(state)) {
+      const stored = storage.getItem(KEY);
+      if (stored !== null && JSON.stringify(Core.normalizeState(JSON.parse(stored)).state) !== JSON.stringify(Core.normalizeState(state).state)) {
         $('#payday-error').textContent = 'Dane na urządzeniu zmieniły się. Odśwież aplikację przed zmianą dnia wypłaty.';
         $('#payday-error').classList.remove('hidden');
         return;
       }
-      localStorage.setItem(KEY, JSON.stringify(next));
+      storage.setItem(KEY, JSON.stringify(next));
     } catch {
       $('#payday-error').textContent = 'Nie udało się zapisać dnia wypłaty. Poprzednie ustawienie pozostaje bez zmian. Spróbuj ponownie.';
       $('#payday-error').classList.remove('hidden');
@@ -1303,7 +1324,7 @@
       });
       if (generation !== importGeneration) return;
       const prepared = window.SpendoBackup.prepare(content);
-      const expected = localStorage.getItem(KEY);
+      const expected = storage.getItem(KEY);
       pendingImport = { prepared, expected };
       const copy = prepared.state;
       $('#import-summary').textContent = `Wydatki: ${copy.expenses.length} · Okresy: ${Object.keys(copy.budgets).length} · Cele: ${copy.savingsGoals.length} · Stałe rachunki: ${copy.recurringBills.length} · Wersja danych: ${prepared.version} · Migracja: ${prepared.migrated ? 'tak, do wersji 6' : 'nie'}.`;
@@ -1318,7 +1339,7 @@
     importBusy = true;
     $('#import-restore').disabled = true;
     try {
-      const restored = window.SpendoBackup.restore(localStorage, pendingImport.prepared, pendingImport.expected);
+      const restored = window.SpendoBackup.restore(storage, pendingImport.prepared, pendingImport.expected);
       state = restored;
       selectedPeriod = Core.periodForDate(todayKey, state.payday);
       selectedMonth = Core.monthKey(today);

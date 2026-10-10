@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
   };
   const storage = { value: 'original', writes: 0, getItem() { return this.value; }, setItem(key, value) { this.writes++; this.value = value; }, removeItem() { this.value = null; } };
   let refreshed = 0, exports = 0;
-  const context = { KEY: 'dzienny.v1', window: {}, Blob, $, localStorage: storage, todayKey: '2026-10-09', today: new Date(2026, 9, 9),
+  const context = { KEY: 'dzienny.v1', window: {}, Blob, $, localStorage: storage, storage, todayKey: '2026-10-09', today: new Date(2026, 9, 9),
     state: null, selectedPeriod: null, selectedMonth: '', selectedDay: '', budgetGoalsSectionEnabled: null,
     applyTheme() {}, update() { refreshed++; }, showToast() {},
     FileReader: class { readAsText(file) { this.result = file.content; Promise.resolve().then(() => this.onload()); } } };

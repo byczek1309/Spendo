@@ -14,7 +14,7 @@ const store = { value: null, writes: 0, fail: false,
   getItem() { return this.value; }, setItem(key, value) { if (this.fail) throw Error('QuotaExceededError'); this.value = value; this.writes++; } };
 let updates = 0, confirms = [], confirmation = true;
 const ctx = { window: { confirm(message) { confirms.push(message); return confirmation; } }, Blob, $, KEY: 'dzienny.v1',
-  localStorage: store, document: { activeElement: { focus() {} } }, todayKey: '2026-10-09',
+  localStorage: store, storage: store, document: { activeElement: { focus() {} } }, todayKey: '2026-10-09',
   setTimeout() {}, crypto: { randomUUID: () => 'new-id' }, update() { updates++; }, showToast() {}, updateCategoryPoolHint() {},
   money: value => String(value), periodLabel: period => `${period.start}–${period.end}` };
 vm.createContext(ctx);

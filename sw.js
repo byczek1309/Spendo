@@ -1,5 +1,5 @@
-const CACHE = 'spendo-v40';
-const CORE = ['/', '/index.html', '/styles.css', '/budget-core.js', '/backup-core.js', '/app.js', '/manifest.webmanifest', '/brand-assets/pulnora-apple-touch-icon-180.png', '/brand-assets/pulnora-icon-192.png', '/brand-assets/pulnora-icon-512.png', '/brand-assets/pulnora-icon-maskable-512.png', '/brand-assets/pulnora-icon.svg', '/brand-assets/pulnora-favicon-32.png', '/brand-assets/pulnora-favicon-48.png'];
+const CACHE = 'spendo-v41';
+const CORE = ['/', '/index.html', '/styles.css', '/budget-core.js', '/backup-core.js', '/data-safety.js', '/app.js', '/manifest.webmanifest', '/brand-assets/pulnora-apple-touch-icon-180.png', '/brand-assets/pulnora-icon-192.png', '/brand-assets/pulnora-icon-512.png', '/brand-assets/pulnora-icon-maskable-512.png', '/brand-assets/pulnora-icon.svg', '/brand-assets/pulnora-favicon-32.png', '/brand-assets/pulnora-favicon-48.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

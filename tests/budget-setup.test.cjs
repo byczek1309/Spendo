@@ -19,7 +19,7 @@ const storage = { value: null, writes: 0, fail: false, duringSave: null,
   getItem() { return this.value; }, setItem(key, value) { assert.equal(key, 'dzienny.v1'); this.duringSave?.(); if (this.fail) throw Error('QuotaExceededError'); this.writes++; this.value = value; } };
 const screens = ['today', 'budget'].map(name => ({ ...$(`#screen-${name}`), id: `screen-${name}` }));
 const tabs = ['today', 'budget'].map(name => ({ ...$(`#tab-${name}`), dataset: { screen: name } }));
-const ctx = { window: { confirm: () => true, scrollTo(options) { navigations.push(options); } }, Blob, $, KEY: 'dzienny.v1', localStorage: storage,
+const ctx = { window: { confirm: () => true, scrollTo(options) { navigations.push(options); } }, Blob, $, KEY: 'dzienny.v1', localStorage: storage, storage,
   $$(selector) { if (selector === '[data-plan-bill-id]:checked') return selected; if (selector === '[data-goal-contribution]') return contributions; if (selector === '.screen') return screens; if (selector === '.tab') return tabs; return []; },
   money: value => new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value),
   showToast(message) { toasts.push(message); }, update() { updates++; const period = ctx.selectedPeriod; const amounts = ctx.Core.poolAmounts(ctx.Core.budgetForPeriod(ctx.state.budgets, period)); lastLimit = ctx.Core.dailyPlan(period, amounts.life, ctx.state.expenses, '2026-10-10').safeToday; },
